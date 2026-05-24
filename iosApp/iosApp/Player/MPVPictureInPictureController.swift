@@ -151,10 +151,20 @@ final class MPVPictureInPictureController: NSObject {
     }
 
     private func enqueueNextFrame() {
+        syncControlTimebaseToPlayback()
         let pixelBuffer = frameSource?.capturePictureInPictureFrame()
             ?? makePlaceholderPixelBuffer(size: CGSize(width: 320, height: 180), color: placeholderColor)
         guard let pixelBuffer else { return }
         enqueuePixelBuffer(pixelBuffer)
+    }
+
+    private func syncControlTimebaseToPlayback() {
+        guard let timebase = displayLayer.controlTimebase,
+              let playbackController = playbackController else { return }
+        let positionMs = playbackController.positionMs
+        let positionTime = CMTime(value: max(positionMs, 0), timescale: 1000)
+        CMTimebaseSetTime(timebase, time: positionTime)
+        CMTimebaseSetRate(timebase, rate: playbackController.isPlaying ? 1.0 : 0.0)
     }
 
     private func configureTimebase() {

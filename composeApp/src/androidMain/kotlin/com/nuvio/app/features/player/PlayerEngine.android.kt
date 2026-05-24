@@ -207,6 +207,26 @@ actual fun PlatformPlayerSurface(
             exoPlayer.pause()
         }
 
+        PlayerPictureInPictureManager.registerPlaybackActions(object : PlayerPipPlaybackActions {
+            override fun togglePlayback() {
+                if (exoPlayer.isPlaying) {
+                    exoPlayer.pause()
+                } else {
+                    exoPlayer.playWhenReady = true
+                    exoPlayer.play()
+                }
+            }
+
+            override fun skipBack() {
+                exoPlayer.seekTo((exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L))
+            }
+
+            override fun skipForward() {
+                val duration = exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                exoPlayer.seekTo((exoPlayer.currentPosition + 10_000L).coerceAtMost(duration))
+            }
+        })
+
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 syncPlayerViewKeepScreenOn()
@@ -276,6 +296,7 @@ actual fun PlatformPlayerSurface(
         exoPlayer.addListener(listener)
         onDispose {
             PlayerPictureInPictureManager.registerPausePlaybackCallback(null)
+            PlayerPictureInPictureManager.registerPlaybackActions(null)
             exoPlayer.removeListener(listener)
             playerViewRef?.keepScreenOn = false
             subtitleSelectionJob?.cancel()
