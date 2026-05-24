@@ -2,6 +2,7 @@ package com.nuvio.app.features.player
 
 import android.app.Activity
 import android.app.PictureInPictureParams
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -9,6 +10,8 @@ import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.Lifecycle
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 internal object PlayerPictureInPictureManager {
     private data class SessionState(
@@ -19,7 +22,8 @@ internal object PlayerPictureInPictureManager {
 
     private var sessionState = SessionState()
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var wasInPictureInPictureMode = false
+    private val pipState = MutableStateFlow(false)
+    val isInPictureInPictureMode: StateFlow<Boolean> = pipState
     private var pendingPictureInPictureExitCheck: Runnable? = null
     private var pausePlaybackCallback: (() -> Unit)? = null
 
@@ -39,7 +43,7 @@ internal object PlayerPictureInPictureManager {
 
     fun clearSession(activity: Activity) {
         sessionState = SessionState()
-        wasInPictureInPictureMode = false
+        pipState.value = false
         clearPendingPictureInPictureExitCheck()
         applyPictureInPictureParams(activity)
     }
@@ -49,6 +53,19 @@ internal object PlayerPictureInPictureManager {
         if (callback == null) {
             clearPendingPictureInPictureExitCheck()
         }
+    }
+
+    fun isSupported(activity: Activity): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        return activity.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+    }
+
+    fun enterPictureInPicture(activity: Activity): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        if (!sessionState.isActive) return false
+        if (activity.isFinishing) return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity.isInPictureInPictureMode) return false
+        return activity.enterPictureInPictureMode(buildParams())
     }
 
     fun onUserLeaveHint(activity: Activity): Boolean {
@@ -64,8 +81,8 @@ internal object PlayerPictureInPictureManager {
     ) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
-        val wasInPictureInPicture = wasInPictureInPictureMode
-        wasInPictureInPictureMode = isInPictureInPictureMode
+        val wasInPictureInPicture = pipState.value
+        pipState.value = isInPictureInPictureMode
         clearPendingPictureInPictureExitCheck()
 
         if (!wasInPictureInPicture || isInPictureInPictureMode) return

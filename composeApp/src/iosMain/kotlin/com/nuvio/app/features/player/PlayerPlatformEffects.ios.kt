@@ -2,9 +2,16 @@ package com.nuvio.app.features.player
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import platform.Foundation.NSNotificationCenter
 import platform.MediaPlayer.MPVolumeView
 import platform.UIKit.UIApplication
@@ -14,6 +21,47 @@ import platform.UIKit.UISlider
 
 private const val lockPlayerToLandscapeNotification = "NuvioPlayerLockLandscape"
 private const val unlockPlayerOrientationNotification = "NuvioPlayerUnlockOrientation"
+
+/**
+ * Shared registry — the active mpv bridge publishes itself here so the Compose-side
+ * [ManagePlayerPictureInPicture] hook can drive PiP without holding a direct reference to
+ * the bridge.
+ */
+internal object IosPictureInPictureSession {
+    private val activeBridgeState = MutableStateFlow<NuvioPlayerBridge?>(null)
+    private val isActiveState = MutableStateFlow(false)
+    private val isSupportedState = MutableStateFlow(false)
+
+    val isActive: StateFlow<Boolean> = isActiveState.asStateFlow()
+    val isSupported: StateFlow<Boolean> = isSupportedState.asStateFlow()
+
+    private val listener = object : PictureInPictureStateListener {
+        override fun onPictureInPictureActiveChanged(active: Boolean) {
+            isActiveState.value = active
+        }
+    }
+
+    fun registerBridge(bridge: NuvioPlayerBridge) {
+        activeBridgeState.value?.setPictureInPictureStateListener(null)
+        activeBridgeState.value = bridge
+        bridge.setPictureInPictureStateListener(listener)
+        isActiveState.value = bridge.isPictureInPictureActive()
+        isSupportedState.value = bridge.isPictureInPictureSupported()
+    }
+
+    fun unregisterBridge(bridge: NuvioPlayerBridge) {
+        if (activeBridgeState.value === bridge) {
+            bridge.setPictureInPictureStateListener(null)
+            activeBridgeState.value = null
+            isActiveState.value = false
+            isSupportedState.value = false
+        }
+    }
+
+    fun start() {
+        activeBridgeState.value?.startPictureInPicture()
+    }
+}
 
 @Composable
 actual fun LockPlayerToLandscape() {
@@ -49,7 +97,27 @@ actual fun EnterImmersivePlayerMode(keepScreenAwake: Boolean) {
 actual fun ManagePlayerPictureInPicture(
     isPlaying: Boolean,
     playerSize: IntSize,
-) = Unit
+): PlayerPictureInPictureController {
+    var supported by remember { mutableStateOf(IosPictureInPictureSession.isSupported.value) }
+    var active by remember { mutableStateOf(IosPictureInPictureSession.isActive.value) }
+
+    LaunchedEffect(Unit) {
+        IosPictureInPictureSession.isSupported.collect { value -> supported = value }
+    }
+    LaunchedEffect(Unit) {
+        IosPictureInPictureSession.isActive.collect { value -> active = value }
+    }
+
+    return remember(supported, active) {
+        object : PlayerPictureInPictureController {
+            override val isSupported: Boolean = supported
+            override val isActive: Boolean = active
+            override fun enter() {
+                IosPictureInPictureSession.start()
+            }
+        }
+    }
+}
 
 @Composable
 actual fun rememberPlayerGestureController(): PlayerGestureController? {
