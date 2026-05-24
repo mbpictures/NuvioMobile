@@ -18,12 +18,6 @@ protocol MPVPictureInPictureControllerDelegate: AnyObject {
     func pictureInPictureDidChangeActiveState(active: Bool)
 }
 
-/// Provides decoded video frames for PiP rendering. The capture call is invoked on a
-/// background queue and should be non-blocking on the main thread.
-protocol MPVPictureInPictureFrameSource: AnyObject {
-    func capturePictureInPictureFrame() -> CVPixelBuffer?
-}
-
 /// Wraps an `AVPictureInPictureController` driven by an `AVSampleBufferDisplayLayer`.
 ///
 /// Important context: this app uses mpv with a Metal layer for normal playback. iOS PiP
@@ -38,7 +32,6 @@ final class MPVPictureInPictureController: NSObject {
 
     weak var delegate: MPVPictureInPictureControllerDelegate?
     weak var playbackController: MPVPictureInPicturePlaybackController?
-    weak var frameSource: MPVPictureInPictureFrameSource?
 
     var isSupported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
     private(set) var isActive: Bool = false {
@@ -59,7 +52,7 @@ final class MPVPictureInPictureController: NSObject {
     private let renderQueue = DispatchQueue(label: "nuvio.pip.render", qos: .userInteractive)
     private var lastEnqueuedPresentationSeconds: Double = 0
     private var hasInstalledTimebase: Bool = false
-    private let framePumpIntervalSeconds: Double = 1.0 / 15.0
+    private let framePumpIntervalSeconds: Double = 0.5
 
     override init() {
         let layer = AVSampleBufferDisplayLayer()
@@ -126,10 +119,10 @@ final class MPVPictureInPictureController: NSObject {
 
     // MARK: - Frame pump
 
-    /// Drives the AVSampleBufferDisplayLayer with video frames pulled from the source on a
-    /// background queue. When no source is attached the pump emits a placeholder solid color
-    /// so PiP keeps showing audio-only controls instead of an empty layer (which would cause
-    /// AVPictureInPictureController to refuse to start).
+    /// Pumps a placeholder solid-color frame at a slow cadence so the AVSampleBufferDisplayLayer
+    /// always has content. AVPictureInPictureController refuses to start (and may drop the
+    /// session mid-flight) if the layer is empty. Audio + system transport controls continue
+    /// regardless of what visual is being shown.
     private func ensureFramePumpRunning() {
         guard framePumpTimer == nil else { return }
         // Push an initial frame immediately so the layer has content before PiP starts.
@@ -152,9 +145,10 @@ final class MPVPictureInPictureController: NSObject {
 
     private func enqueueNextFrame() {
         syncControlTimebaseToPlayback()
-        let pixelBuffer = frameSource?.capturePictureInPictureFrame()
-            ?? makePlaceholderPixelBuffer(size: CGSize(width: 320, height: 180), color: placeholderColor)
-        guard let pixelBuffer else { return }
+        guard let pixelBuffer = makePlaceholderPixelBuffer(
+            size: CGSize(width: 320, height: 180),
+            color: placeholderColor
+        ) else { return }
         enqueuePixelBuffer(pixelBuffer)
     }
 

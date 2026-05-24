@@ -314,7 +314,6 @@ final class MPVPlayerViewController: UIViewController {
             let coordinator = MPVPictureInPictureController()
             coordinator.delegate = self
             coordinator.playbackController = self
-            coordinator.frameSource = self
             coordinator.attach(toHostView: view)
             pictureInPictureCoordinator = coordinator
         }
@@ -1096,14 +1095,6 @@ extension MPVPlayerViewController: MPVPictureInPicturePlaybackController {
     var isPlaying: Bool {
         refreshPlaybackState()
         return isPlayerPlaying
-    }
-}
-
-@available(iOS 15.0, *)
-extension MPVPlayerViewController: MPVPictureInPictureFrameSource {
-    func capturePictureInPictureFrame() -> CVPixelBuffer? {
-        guard let mpv else { return nil }
-        return MPVScreenshotCapture.capture(mpv: mpv)
     }
 }
 
