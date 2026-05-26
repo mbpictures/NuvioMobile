@@ -187,7 +187,7 @@ internal object MacOSMpvPlayerBackend : DesktopPlaybackBackend {
                     )
                 }
 
-                override fun setMetadata(
+                fun setMetadata(
                     title: String,
                     streamTitle: String,
                     providerName: String,
@@ -210,24 +210,24 @@ internal object MacOSMpvPlayerBackend : DesktopPlaybackBackend {
                     )
                 }
 
-                override fun setPlayerFlags(hasVideoId: Boolean, isSeries: Boolean) {
+                fun setPlayerFlags(hasVideoId: Boolean, isSeries: Boolean) {
                     bridge.nuvio_player_set_has_video_id(playerPtr, hasVideoId)
                     bridge.nuvio_player_set_is_series(playerPtr, isSeries)
                 }
 
-                override fun setSubmitIntroEnabled(enabled: Boolean) {
+                fun setSubmitIntroEnabled(enabled: Boolean) {
                     bridge.nuvio_player_set_submit_intro_enabled(playerPtr, enabled)
                 }
 
-                override fun showSkipButton(type: String, endTimeMs: Long) {
+                fun showSkipButton(type: String, endTimeMs: Long) {
                     bridge.nuvio_player_show_skip_button(playerPtr, type, endTimeMs)
                 }
 
-                override fun hideSkipButton() {
+                fun hideSkipButton() {
                     bridge.nuvio_player_hide_skip_button(playerPtr)
                 }
 
-                override fun showNextEpisode(
+                fun showNextEpisode(
                     season: Int,
                     episode: Int,
                     title: String,
@@ -237,27 +237,27 @@ internal object MacOSMpvPlayerBackend : DesktopPlaybackBackend {
                     bridge.nuvio_player_show_next_episode(playerPtr, season, episode, title, thumbnail, hasAired)
                 }
 
-                override fun hideNextEpisode() {
+                fun hideNextEpisode() {
                     bridge.nuvio_player_hide_next_episode(playerPtr)
                 }
 
-                override fun setOnNextEpisodeRequestedCallback(callback: () -> Unit) {
+                fun setOnNextEpisodeRequestedCallback(callback: () -> Unit) {
                     onNextEpisodeRequestedCallback = callback
                 }
 
-                override fun setOnSubmitIntroSubmittedCallback(callback: (String, Double, Double) -> Unit) {
+                fun setOnSubmitIntroSubmittedCallback(callback: (String, Double, Double) -> Unit) {
                     onSubmitIntroSubmittedCallback = callback
                 }
 
-                override fun setOnCloseCallback(callback: () -> Unit) {
+                fun setOnCloseCallback(callback: () -> Unit) {
                     onCloseCallback = callback
                 }
 
-                override fun setOnAddonSubtitlesFetchCallback(callback: () -> Unit) {
+                fun setOnAddonSubtitlesFetchCallback(callback: () -> Unit) {
                     onAddonSubtitlesFetchCallback = callback
                 }
 
-                override fun pushAddonSubtitles(subtitles: List<AddonSubtitle>, isLoading: Boolean) {
+                fun pushAddonSubtitles(subtitles: List<AddonSubtitle>, isLoading: Boolean) {
                     bridge.nuvio_player_set_addon_subtitles_loading(playerPtr, isLoading)
                     if (!isLoading) {
                         bridge.nuvio_player_clear_addon_subtitles(playerPtr)
@@ -273,47 +273,47 @@ internal object MacOSMpvPlayerBackend : DesktopPlaybackBackend {
                     }
                 }
 
-                override fun setOnSourcesRequestedCallback(callback: () -> Unit) {
+                fun setOnSourcesRequestedCallback(callback: () -> Unit) {
                     onSourcesRequestedCallback = callback
                 }
 
-                override fun setOnSourceStreamSelectedCallback(callback: (String) -> Unit) {
+                fun setOnSourceStreamSelectedCallback(callback: (String) -> Unit) {
                     onSourceStreamSelectedCallback = callback
                 }
 
-                override fun setOnSourceFilterChangedCallback(callback: (String?) -> Unit) {
+                fun setOnSourceFilterChangedCallback(callback: (String?) -> Unit) {
                     onSourceFilterChangedCallback = callback
                 }
 
-                override fun setOnSourceReloadCallback(callback: () -> Unit) {
+                fun setOnSourceReloadCallback(callback: () -> Unit) {
                     onSourceReloadCallback = callback
                 }
 
-                override fun setOnEpisodesRequestedCallback(callback: () -> Unit) {
+                fun setOnEpisodesRequestedCallback(callback: () -> Unit) {
                     onEpisodesRequestedCallback = callback
                 }
 
-                override fun setOnEpisodeSelectedCallback(callback: (String) -> Unit) {
+                fun setOnEpisodeSelectedCallback(callback: (String) -> Unit) {
                     onEpisodeSelectedCallback = callback
                 }
 
-                override fun setOnEpisodeStreamSelectedCallback(callback: (String) -> Unit) {
+                fun setOnEpisodeStreamSelectedCallback(callback: (String) -> Unit) {
                     onEpisodeStreamSelectedCallback = callback
                 }
 
-                override fun setOnEpisodeFilterChangedCallback(callback: (String?) -> Unit) {
+                fun setOnEpisodeFilterChangedCallback(callback: (String?) -> Unit) {
                     onEpisodeFilterChangedCallback = callback
                 }
 
-                override fun setOnEpisodeReloadCallback(callback: () -> Unit) {
+                fun setOnEpisodeReloadCallback(callback: () -> Unit) {
                     onEpisodeReloadCallback = callback
                 }
 
-                override fun setOnEpisodeBackCallback(callback: () -> Unit) {
+                fun setOnEpisodeBackCallback(callback: () -> Unit) {
                     onEpisodeBackCallback = callback
                 }
 
-                override fun pushSourceData(
+                fun pushSourceData(
                     streams: List<StreamItem>,
                     groups: List<AddonStreamGroup>,
                     loading: Boolean,
@@ -347,7 +347,7 @@ internal object MacOSMpvPlayerBackend : DesktopPlaybackBackend {
                     bridge.nuvio_player_commit_source_data_update(playerPtr, loading, selectedFilter)
                 }
 
-                override fun pushEpisodes(episodes: List<MetaVideo>) {
+                fun pushEpisodes(episodes: List<MetaVideo>) {
                     bridge.nuvio_player_clear_episodes(playerPtr)
                     episodes.forEach { episode ->
                         bridge.nuvio_player_add_episode(
@@ -362,7 +362,7 @@ internal object MacOSMpvPlayerBackend : DesktopPlaybackBackend {
                     }
                 }
 
-                override fun pushEpisodeStreamsData(
+                fun pushEpisodeStreamsData(
                     streams: List<StreamItem>,
                     groups: List<AddonStreamGroup>,
                     loading: Boolean,
@@ -396,15 +396,15 @@ internal object MacOSMpvPlayerBackend : DesktopPlaybackBackend {
                     bridge.nuvio_player_commit_episode_streams_data_update(playerPtr, loading, selectedFilter)
                 }
 
-                override fun showEpisodeStreamsView(season: Int?, episode: Int?, title: String?) {
+                fun showEpisodeStreamsView(season: Int?, episode: Int?, title: String?) {
                     bridge.nuvio_player_show_episode_streams(playerPtr, season ?: 0, episode ?: 0, title)
                 }
 
-                override fun dismissNativePanels() {
+                fun dismissNativePanels() {
                     bridge.nuvio_player_dismiss_panels(playerPtr)
                 }
 
-                override fun switchSource(url: String, audioUrl: String?, headersJson: String?) {
+                fun switchSource(url: String, audioUrl: String?, headersJson: String?) {
                     bridge.nuvio_player_load_file(playerPtr, url, audioUrl, headersJson)
                 }
             }
