@@ -216,6 +216,10 @@ private fun TabbedGridContent(
     onPosterClick: (MetaPreview) -> Unit,
 ) {
     val gridState = rememberLazyGridState()
+    val libraryUiState by remember {
+        LibraryRepository.ensureLoaded()
+        LibraryRepository.uiState
+    }.collectAsStateWithLifecycle()
 
     LaunchedEffect(gridState, uiState.selectedTabIndex, uiState.selectedTabCanLoadMore, uiState.selectedTabIsLoadingMore) {
         snapshotFlow { gridState.layoutInfo }
