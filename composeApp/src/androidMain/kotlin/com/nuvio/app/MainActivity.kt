@@ -54,6 +54,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(
+                scrim = android.graphics.Color.TRANSPARENT,
+            ),
             navigationBarStyle = SystemBarStyle.dark(
                 scrim = 0xFF020404.toInt(),
             ),
@@ -94,6 +97,7 @@ class MainActivity : AppCompatActivity() {
         CollectionStorage.initialize(applicationContext)
         DownloadsStorage.initialize(applicationContext)
         DownloadsPlatformDownloader.initialize(applicationContext)
+        DownloadsPlatformDownloader.bindActivity(this)
         DownloadsLiveStatusPlatform.initialize(applicationContext)
         AndroidAppUpdaterPlatform.initialize(applicationContext)
         PlatformLocalAccountDataCleaner.initialize(applicationContext)
@@ -127,6 +131,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         EpisodeReleaseNotificationPlatform.unbindActivity(this)
+        DownloadsPlatformDownloader.unbindActivity(this)
         super.onDestroy()
     }
 
@@ -136,6 +141,9 @@ class MainActivity : AppCompatActivity() {
         grantResults: IntArray,
     ) {
         if (EpisodeReleaseNotificationPlatform.handlePermissionRequestResult(requestCode, grantResults)) {
+            return
+        }
+        if (DownloadsPlatformDownloader.handlePermissionRequestResult(requestCode, grantResults)) {
             return
         }
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

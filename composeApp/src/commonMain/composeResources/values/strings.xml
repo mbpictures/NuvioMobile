@@ -1224,6 +1224,8 @@
     <string name="download_failed">Download failed</string>
     <string name="downloads_channel_description">Shows live download progress and controls.</string>
     <string name="downloads_channel_name">Downloads</string>
+    <string name="downloads_foreground_title">Downloads in progress</string>
+    <string name="downloads_foreground_subtitle">Keeping downloads running in the background</string>
     <string name="downloads_live_completed">Download completed</string>
     <string name="downloads_live_downloading">Downloading %1$s • %2$s</string>
     <string name="downloads_live_downloading_with_total">Downloading %1$s • %2$s / %3$s</string>
@@ -1397,4 +1399,20 @@
     <string name="unit_bytes_kb">KB</string>
     <string name="unit_bytes_mb">MB</string>
     <string name="unit_bytes_gb">GB</string>
+    <string name="cw_airs_date">Airs %1$s</string>
+    <string name="cw_airs_today">Airs today</string>
+    <string name="cw_airs_tomorrow">Airs tomorrow</string>
+    <plurals name="cw_airs_in_days">
+        <item quantity="one">Airs in %1$d day</item>
+        <item quantity="other">Airs in %1$d days</item>
+    </plurals>
+    <string name="cw_airs_date_short">%1$s</string>
+    <string name="cw_airs_today_short">Today</string>
+    <string name="cw_airs_tomorrow_short">Tomorrow</string>
+    <plurals name="cw_airs_in_days_short">
+        <item quantity="one">In %1$d day</item>
+        <item quantity="other">In %1$d days</item>
+    </plurals>
+    <string name="cw_new_episode">New Episode</string>
+    <string name="cw_new_season">New Season</string>
 </resources>
