@@ -54,7 +54,7 @@
 
 <!-- What you tested and how. Include devices/emulators, commands, and manual flows. Do not write only "not tested" unless this is docs/translation-only. -->
 
-## Screenshots / Video (UI changes only)
+## Screenshots / Video
 
 <!-- Required for any UI change. Write "Not a UI change" only if no UI changed. -->
 
