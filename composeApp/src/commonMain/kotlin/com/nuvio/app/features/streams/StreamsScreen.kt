@@ -1004,7 +1004,7 @@ private fun StreamCard(
             )
             .clip(cardShape)
             .background(Color.White.copy(alpha = 0.05f))
-            .nuvioSecondaryClick(if (isEnabled) onLongClick else null)
+            .nuvioSecondaryClick(if (enabled) onLongClick else null)
             .combinedClickable(
                 enabled = enabled,
                 onClick = onClick,
