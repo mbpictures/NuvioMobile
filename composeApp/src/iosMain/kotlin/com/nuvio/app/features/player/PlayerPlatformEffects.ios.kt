@@ -30,10 +30,8 @@ private const val unlockPlayerOrientationNotification = "NuvioPlayerUnlockOrient
 internal object IosPictureInPictureSession {
     private val activeBridgeState = MutableStateFlow<NuvioPlayerBridge?>(null)
     private val isActiveState = MutableStateFlow(false)
-    private val isSupportedState = MutableStateFlow(false)
 
     val isActive: StateFlow<Boolean> = isActiveState.asStateFlow()
-    val isSupported: StateFlow<Boolean> = isSupportedState.asStateFlow()
 
     private val listener = object : PictureInPictureStateListener {
         override fun onPictureInPictureActiveChanged(active: Boolean) {
@@ -46,7 +44,6 @@ internal object IosPictureInPictureSession {
         activeBridgeState.value = bridge
         bridge.setPictureInPictureStateListener(listener)
         isActiveState.value = bridge.isPictureInPictureActive()
-        isSupportedState.value = bridge.isPictureInPictureSupported()
     }
 
     fun unregisterBridge(bridge: NuvioPlayerBridge) {
@@ -54,7 +51,6 @@ internal object IosPictureInPictureSession {
             bridge.setPictureInPictureStateListener(null)
             activeBridgeState.value = null
             isActiveState.value = false
-            isSupportedState.value = false
         }
     }
 
@@ -98,19 +94,21 @@ actual fun ManagePlayerPictureInPicture(
     isPlaying: Boolean,
     playerSize: IntSize,
 ): PlayerPictureInPictureController {
-    var supported by remember { mutableStateOf(IosPictureInPictureSession.isSupported.value) }
     var active by remember { mutableStateOf(IosPictureInPictureSession.isActive.value) }
 
-    LaunchedEffect(Unit) {
-        IosPictureInPictureSession.isSupported.collect { value -> supported = value }
-    }
     LaunchedEffect(Unit) {
         IosPictureInPictureSession.isActive.collect { value -> active = value }
     }
 
-    return remember(supported, active) {
+    // iOS apps cannot programmatically background themselves, so a manual PiP button
+    // can't deliver the Android-style "tap to minimize + float" UX. AVKit's inline
+    // auto-start (canStartPictureInPictureAutomaticallyFromInline = true) handles PiP
+    // when the user swipes home, which is the native iOS pattern. Report unsupported
+    // so the player header hides the button; isActive still tracks system PiP state
+    // so the rest of the UI reacts when the floating window appears.
+    return remember(active) {
         object : PlayerPictureInPictureController {
-            override val isSupported: Boolean = supported
+            override val isSupported: Boolean = false
             override val isActive: Boolean = active
             override fun enter() {
                 IosPictureInPictureSession.start()
