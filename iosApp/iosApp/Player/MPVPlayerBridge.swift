@@ -10,10 +10,14 @@ import ComposeApp
 final class MPVPlayerBridgeImpl: NSObject, NuvioPlayerBridge {
 
     private var playerVC: MPVPlayerViewController?
+    private var pendingPictureInPictureListener: PictureInPictureStateListener?
 
     func createPlayerViewController() -> UIViewController {
         let vc = MPVPlayerViewController()
         self.playerVC = vc
+        if #available(iOS 15.0, *), let listener = pendingPictureInPictureListener {
+            vc.pictureInPictureStateListener = listener
+        }
         return vc
     }
 
@@ -143,7 +147,9 @@ final class MPVPlayerBridgeImpl: NSObject, NuvioPlayerBridge {
 
     func isPictureInPictureSupported() -> Bool {
         if #available(iOS 15.0, *) {
-            return playerVC?.isPictureInPictureSupported ?? false
+            // Treat the system capability as the source of truth so the Compose-side
+            // button can render before the player view controller has been instantiated.
+            return AVPictureInPictureController.isPictureInPictureSupported()
         }
         return false
     }
@@ -169,6 +175,7 @@ final class MPVPlayerBridgeImpl: NSObject, NuvioPlayerBridge {
 
     func setPictureInPictureStateListener(listener: PictureInPictureStateListener?) {
         if #available(iOS 15.0, *) {
+            pendingPictureInPictureListener = listener
             playerVC?.pictureInPictureStateListener = listener
         }
     }
@@ -314,6 +321,7 @@ final class MPVPlayerViewController: UIViewController {
             let coordinator = MPVPictureInPictureController()
             coordinator.delegate = self
             coordinator.playbackController = self
+            coordinator.frameSource = self
             coordinator.attach(toHostView: view)
             pictureInPictureCoordinator = coordinator
         }
@@ -434,10 +442,9 @@ final class MPVPlayerViewController: UIViewController {
     @objc private func enterBackground() {
         guard mpv != nil else { return }
         if #available(iOS 15.0, *), isPictureInPictureActive {
-            // PiP is active — keep playback running and let mpv decode audio.
-            // We still drop video decoding because the Metal layer isn't visible while the
-            // app is backgrounded, and the PiP layer is fed by its own pump.
-            setStringProperty("vid", "no")
+            // PiP is active — keep video decoding alive so the PiP frame pump can pull
+            // real frames via screenshot-raw. The Metal layer is off-screen but mpv's
+            // decoder continues to produce frames into its internal buffer.
             return
         }
         pausePlayback()
@@ -446,11 +453,13 @@ final class MPVPlayerViewController: UIViewController {
 
     @objc private func enterForeground() {
         guard mpv != nil else { return }
-        setStringProperty("vid", "auto")
         if #available(iOS 15.0, *), isPictureInPictureActive {
-            // Keep current play/pause state; don't force play.
+            // Video decoding was never disabled — nothing to restore. Preserve the
+            // current play/pause state so we don't fight whatever the system PiP
+            // transport told us to do.
             return
         }
+        setStringProperty("vid", "auto")
         playPlayback()
     }
 
@@ -1095,6 +1104,14 @@ extension MPVPlayerViewController: MPVPictureInPicturePlaybackController {
     var isPlaying: Bool {
         refreshPlaybackState()
         return isPlayerPlaying
+    }
+}
+
+@available(iOS 15.0, *)
+extension MPVPlayerViewController: MPVPictureInPictureFrameSource {
+    func capturePictureInPictureFrame() -> CVPixelBuffer? {
+        guard let mpv else { return nil }
+        return MPVScreenshotCapture.capture(mpv: mpv)
     }
 }
 

@@ -18,6 +18,12 @@ protocol MPVPictureInPictureControllerDelegate: AnyObject {
     func pictureInPictureDidChangeActiveState(active: Bool)
 }
 
+/// Supplies decoded video frames to the PiP layer. Called on a background queue at the
+/// frame pump's cadence; the implementation must be safe to invoke off the main thread.
+protocol MPVPictureInPictureFrameSource: AnyObject {
+    func capturePictureInPictureFrame() -> CVPixelBuffer?
+}
+
 /// Wraps an `AVPictureInPictureController` driven by an `AVSampleBufferDisplayLayer`.
 ///
 /// Important context: this app uses mpv with a Metal layer for normal playback. iOS PiP
@@ -32,6 +38,7 @@ final class MPVPictureInPictureController: NSObject {
 
     weak var delegate: MPVPictureInPictureControllerDelegate?
     weak var playbackController: MPVPictureInPicturePlaybackController?
+    weak var frameSource: MPVPictureInPictureFrameSource?
 
     var isSupported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
     private(set) var isActive: Bool = false {
@@ -52,7 +59,7 @@ final class MPVPictureInPictureController: NSObject {
     private let renderQueue = DispatchQueue(label: "nuvio.pip.render", qos: .userInteractive)
     private var lastEnqueuedPresentationSeconds: Double = 0
     private var hasInstalledTimebase: Bool = false
-    private let framePumpIntervalSeconds: Double = 0.5
+    private let framePumpIntervalSeconds: Double = 1.0 / 10.0
 
     override init() {
         let layer = AVSampleBufferDisplayLayer()
@@ -82,6 +89,11 @@ final class MPVPictureInPictureController: NSObject {
         controller.canStartPictureInPictureAutomaticallyFromInline = true
         controller.delegate = self
         pictureInPictureController = controller
+
+        // Prime the display layer with a single frame so iOS recognises it as ready
+        // for PiP. Without this, `canStartPictureInPictureAutomaticallyFromInline`
+        // does not trigger automatic PiP when the app moves to the background.
+        enqueueNextFrame()
     }
 
     func detachFromHost() {
@@ -145,10 +157,9 @@ final class MPVPictureInPictureController: NSObject {
 
     private func enqueueNextFrame() {
         syncControlTimebaseToPlayback()
-        guard let pixelBuffer = makePlaceholderPixelBuffer(
-            size: CGSize(width: 320, height: 180),
-            color: placeholderColor
-        ) else { return }
+        let pixelBuffer = frameSource?.capturePictureInPictureFrame()
+            ?? makePlaceholderPixelBuffer(size: CGSize(width: 320, height: 180), color: placeholderColor)
+        guard let pixelBuffer else { return }
         enqueuePixelBuffer(pixelBuffer)
     }
 
