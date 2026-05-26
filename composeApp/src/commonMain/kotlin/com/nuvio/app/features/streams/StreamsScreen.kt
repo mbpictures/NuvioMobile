@@ -3,9 +3,12 @@ package com.nuvio.app.features.streams
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -38,6 +41,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Refresh
@@ -85,6 +89,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.nuvioSecondaryClick
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.features.debrid.DebridProviders
+import com.nuvio.app.features.debrid.DebridSettingsRepository
+import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import kotlinx.coroutines.launch
 import kotlin.math.round
@@ -115,10 +122,24 @@ fun StreamsScreen(
     manualSelection: Boolean = false,
     startFromBeginning: Boolean = false,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit = { _, _, _ -> },
+    onStreamActionOpen: (
+        stream: StreamItem,
+        openExternally: Boolean,
+        resumePositionMs: Long?,
+        resumeProgressFraction: Float?,
+    ) -> Unit = { _, _, _, _ -> },
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uiState by StreamsRepository.uiState.collectAsStateWithLifecycle()
+    val playerSettings by remember {
+        PlayerSettingsRepository.ensureLoaded()
+        PlayerSettingsRepository.uiState
+    }.collectAsStateWithLifecycle()
+    val debridSettings by remember {
+        DebridSettingsRepository.ensureLoaded()
+        DebridSettingsRepository.uiState
+    }.collectAsStateWithLifecycle()
     val watchProgressUiState by remember {
         WatchProgressRepository.ensureLoaded()
         WatchProgressRepository.uiState
@@ -130,7 +151,6 @@ fun StreamsScreen(
     val clipboardManager = LocalClipboardManager.current
     val streamLinkCopiedText = stringResource(Res.string.streams_link_copied)
     val noDirectStreamLinkText = stringResource(Res.string.streams_no_direct_link)
-    val torrentUnsupportedText = stringResource(Res.string.streams_torrent_not_supported)
     var streamActionsTarget by remember(videoId) { mutableStateOf<StreamItem?>(null) }
     var preferredFilterApplied by remember(videoId) { mutableStateOf(false) }
     val storedProgress = if (startFromBeginning) {
@@ -165,6 +185,7 @@ fun StreamsScreen(
         StreamsRepository.load(
             type = type,
             videoId = videoId,
+            parentMetaId = parentMetaId,
             season = seasonNumber,
             episode = episodeNumber,
             manualSelection = manualSelection,
@@ -205,14 +226,12 @@ fun StreamsScreen(
                 episodeNumber = episodeNumber,
                 episodeTitle = episodeTitle,
                 uiState = uiState,
+                debridEnabled = debridSettings.canResolvePlayableLinks,
+                appendInstantServiceToDefaultName = debridSettings.canResolvePlayableLinks && !debridSettings.hasCustomStreamFormatting,
                 resumePositionMs = effectiveResumePositionMs,
                 resumeProgressFraction = effectiveResumeProgressFraction,
                 onStreamSelected = { stream, positionMs, progressFraction ->
-                    if (stream.isTorrentStream) {
-                        NuvioToastController.show(torrentUnsupportedText)
-                    } else {
-                        onStreamSelected(stream, positionMs, progressFraction)
-                    }
+                    onStreamSelected(stream, positionMs, progressFraction)
                 },
                 onStreamLongPress = { stream -> streamActionsTarget = stream },
             )
@@ -226,14 +245,12 @@ fun StreamsScreen(
                 episodeNumber = episodeNumber,
                 episodeTitle = episodeTitle,
                 uiState = uiState,
+                debridEnabled = debridSettings.canResolvePlayableLinks,
+                appendInstantServiceToDefaultName = debridSettings.canResolvePlayableLinks && !debridSettings.hasCustomStreamFormatting,
                 resumePositionMs = effectiveResumePositionMs,
                 resumeProgressFraction = effectiveResumeProgressFraction,
                 onStreamSelected = { stream, positionMs, progressFraction ->
-                    if (stream.isTorrentStream) {
-                        NuvioToastController.show(torrentUnsupportedText)
-                    } else {
-                        onStreamSelected(stream, positionMs, progressFraction)
-                    }
+                    onStreamSelected(stream, positionMs, progressFraction)
                 },
                 onStreamLongPress = { stream -> streamActionsTarget = stream },
             )
@@ -266,6 +283,7 @@ fun StreamsScreen(
                             StreamsRepository.reload(
                                 type = type,
                                 videoId = videoId,
+                                parentMetaId = parentMetaId,
                                 season = seasonNumber,
                                 episode = episodeNumber,
                                 manualSelection = manualSelection,
@@ -324,9 +342,10 @@ fun StreamsScreen(
 
         StreamActionsSheet(
             stream = streamActionsTarget,
+            externalPlayerEnabled = playerSettings.externalPlayerEnabled,
             onDismiss = { streamActionsTarget = null },
             onCopyLink = { stream ->
-                val directUrl = stream.directPlaybackUrl
+                val directUrl = stream.playableDirectUrl
                 if (!directUrl.isNullOrBlank()) {
                     clipboardManager.setText(AnnotatedString(directUrl))
                     NuvioToastController.show(streamLinkCopiedText)
@@ -352,6 +371,14 @@ fun StreamsScreen(
                 )
                 NuvioToastController.show(result.toastMessage())
             },
+            onOpen = { stream, openExternally ->
+                onStreamActionOpen(
+                    stream,
+                    openExternally,
+                    effectiveResumePositionMs,
+                    effectiveResumeProgressFraction,
+                )
+            },
         )
     }
 }
@@ -366,6 +393,8 @@ private fun MobileStreamsLayout(
     episodeNumber: Int?,
     episodeTitle: String?,
     uiState: StreamsUiState,
+    debridEnabled: Boolean,
+    appendInstantServiceToDefaultName: Boolean,
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
@@ -446,6 +475,8 @@ private fun MobileStreamsLayout(
 
                     StreamList(
                         uiState = uiState,
+                        debridEnabled = debridEnabled,
+                        appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                         onStreamSelected = onStreamSelected,
                         onStreamLongPress = onStreamLongPress,
                         resumePositionMs = resumePositionMs,
@@ -739,6 +770,8 @@ private fun FilterChip(
 @Composable
 internal fun StreamList(
     uiState: StreamsUiState,
+    debridEnabled: Boolean,
+    appendInstantServiceToDefaultName: Boolean,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     resumePositionMs: Long?,
@@ -777,6 +810,8 @@ internal fun StreamList(
                         sectionKey = streamSectionRenderKey(groupIndex = groupIndex, group = group),
                         group = group,
                         showHeader = uiState.selectedFilter == null,
+                        debridEnabled = debridEnabled,
+                        appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                         onStreamSelected = onStreamSelected,
                         onStreamLongPress = onStreamLongPress,
                         resumePositionMs = resumePositionMs,
@@ -800,6 +835,8 @@ private fun LazyListScope.streamSection(
     sectionKey: String,
     group: AddonStreamGroup,
     showHeader: Boolean,
+    debridEnabled: Boolean,
+    appendInstantServiceToDefaultName: Boolean,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     resumePositionMs: Long?,
@@ -843,13 +880,15 @@ private fun LazyListScope.streamSection(
         ) { _, stream ->
             StreamCard(
                 stream = stream,
+                enabled = stream.isSelectableForPlayback(debridEnabled),
+                appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                 onClick = {
-                    if (stream.directPlaybackUrl != null || stream.isTorrentStream) {
+                    if (stream.isSelectableForPlayback(debridEnabled)) {
                         onStreamSelected(stream, resumePositionMs, resumeProgressFraction)
                     }
                 },
                 onLongClick = {
-                    if (stream.directPlaybackUrl != null) {
+                    if (stream.playableDirectUrl != null) {
                         onStreamLongPress(stream)
                     }
                 },
@@ -876,7 +915,7 @@ internal fun streamCardRenderKey(
     append(':')
     append(itemIndex)
     append(':')
-    append(stream.url ?: stream.infoHash ?: stream.streamLabel)
+    append(stream.url ?: stream.infoHash ?: stream.clientResolve?.infoHash ?: stream.streamLabel)
 }
 
 // ---------------------------------------------------------------------------
@@ -946,11 +985,12 @@ private fun StreamSourceHeader(
 @Composable
 private fun StreamCard(
     stream: StreamItem,
+    enabled: Boolean,
+    appendInstantServiceToDefaultName: Boolean,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val isEnabled = stream.directPlaybackUrl != null || stream.isTorrentStream
     val cardShape = RoundedCornerShape(12.dp)
     Row(
         modifier = modifier
@@ -966,7 +1006,7 @@ private fun StreamCard(
             .background(Color.White.copy(alpha = 0.05f))
             .nuvioSecondaryClick(if (isEnabled) onLongClick else null)
             .combinedClickable(
-                enabled = isEnabled,
+                enabled = enabled,
                 onClick = onClick,
                 onLongClick = onLongClick,
             )
@@ -974,15 +1014,9 @@ private fun StreamCard(
         verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stream.streamLabel,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    lineHeight = 20.sp,
-                    letterSpacing = 0.1.sp,
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
+            StreamNameWithInstantService(
+                stream = stream,
+                appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
             )
 
             val subtitle = stream.streamSubtitle
@@ -999,9 +1033,64 @@ private fun StreamCard(
             }
 
             Spacer(modifier = Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 StreamFileSizeBadge(stream = stream)
             }
+        }
+    }
+}
+
+@Composable
+private fun StreamNameWithInstantService(
+    stream: StreamItem,
+    appendInstantServiceToDefaultName: Boolean,
+) {
+    val nameStyle = MaterialTheme.typography.bodyMedium.copy(
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Bold,
+        lineHeight = 20.sp,
+        letterSpacing = 0.sp,
+    )
+    val instantLabel = if (appendInstantServiceToDefaultName) {
+        stream.instantServiceLabel()
+    } else {
+        null
+    }
+    val showInstantLabel = instantLabel != null
+    val visibleState = remember(stream.streamLabel) {
+        MutableTransitionState(showInstantLabel)
+    }
+    visibleState.targetState = showInstantLabel
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stream.streamLabel,
+            modifier = Modifier.weight(1f, fill = false),
+            style = nameStyle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = fadeIn(animationSpec = tween(durationMillis = 260)) +
+                expandHorizontally(
+                    animationSpec = tween(durationMillis = 260),
+                    expandFrom = Alignment.Start,
+                ),
+            exit = fadeOut(animationSpec = tween(durationMillis = 120)) +
+                shrinkHorizontally(
+                    animationSpec = tween(durationMillis = 120),
+                    shrinkTowards = Alignment.Start,
+                ),
+            label = "streamNameInstantService",
+        ) {
+            Text(
+                text = " ${instantLabel.orEmpty()}",
+                style = nameStyle,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
@@ -1010,9 +1099,11 @@ private fun StreamCard(
 @Composable
 private fun StreamActionsSheet(
     stream: StreamItem?,
+    externalPlayerEnabled: Boolean,
     onDismiss: () -> Unit,
     onCopyLink: (StreamItem) -> Unit,
     onDownload: (StreamItem) -> Unit,
+    onOpen: (StreamItem, openExternally: Boolean) -> Unit,
 ) {
     if (stream == null) return
 
@@ -1072,6 +1163,23 @@ private fun StreamActionsSheet(
             )
             NuvioBottomSheetDivider()
             NuvioBottomSheetActionRow(
+                icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                title = stringResource(
+                    if (externalPlayerEnabled) {
+                        Res.string.streams_open_internal_player
+                    } else {
+                        Res.string.streams_open_external_player
+                    },
+                ),
+                onClick = {
+                    onOpen(stream, !externalPlayerEnabled)
+                    coroutineScope.launch {
+                        dismissNuvioBottomSheet(sheetState = sheetState, onDismiss = onDismiss)
+                    }
+                },
+            )
+            NuvioBottomSheetDivider()
+            NuvioBottomSheetActionRow(
                 icon = Icons.Rounded.Download,
                 title = stringResource(Res.string.streams_download_file),
                 onClick = {
@@ -1083,6 +1191,15 @@ private fun StreamActionsSheet(
             )
         }
     }
+}
+
+private fun StreamItem.instantServiceLabel(): String? {
+    val status = debridCacheStatus ?: return null
+    if (status.state != StreamDebridCacheState.CACHED) return null
+    val providerLabel = DebridProviders.shortName(status.providerId)
+        .ifBlank { status.providerName.trim() }
+        .ifBlank { DebridProviders.displayName(status.providerId) }
+    return "- $providerLabel Instant"
 }
 
 @Composable

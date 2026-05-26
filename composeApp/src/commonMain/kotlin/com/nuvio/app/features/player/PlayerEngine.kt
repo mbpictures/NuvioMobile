@@ -18,61 +18,7 @@ interface PlayerEngineController {
     fun clearExternalSubtitle()
     fun clearExternalSubtitleAndSelect(trackIndex: Int)
     fun applySubtitleStyle(style: SubtitleStyleState) {}
-    fun setMetadata(
-        title: String,
-        streamTitle: String,
-        providerName: String,
-        seasonNumber: Int? = null,
-        episodeNumber: Int? = null,
-        episodeTitle: String? = null,
-        artwork: String? = null,
-        logo: String? = null,
-    ) {}
-    fun setPlayerFlags(hasVideoId: Boolean, isSeries: Boolean) {}
-    fun setSubmitIntroEnabled(enabled: Boolean) {}
-    fun showSkipButton(type: String, endTimeMs: Long) {}
-    fun hideSkipButton() {}
-    fun showNextEpisode(
-        season: Int,
-        episode: Int,
-        title: String,
-        thumbnail: String? = null,
-        hasAired: Boolean = true,
-    ) {}
-    fun hideNextEpisode() {}
-    fun setOnNextEpisodeRequestedCallback(callback: () -> Unit) {}
-    fun setOnSubmitIntroSubmittedCallback(callback: (segmentType: String, startSec: Double, endSec: Double) -> Unit) {}
-    fun setOnCloseCallback(callback: () -> Unit) {}
-    fun setOnAddonSubtitlesFetchCallback(callback: () -> Unit) {}
-    fun pushAddonSubtitles(subtitles: List<AddonSubtitle>, isLoading: Boolean) {}
-    fun setOnSourcesRequestedCallback(callback: () -> Unit) {}
-    fun setOnSourceStreamSelectedCallback(callback: (String) -> Unit) {}
-    fun setOnSourceFilterChangedCallback(callback: (String?) -> Unit) {}
-    fun setOnSourceReloadCallback(callback: () -> Unit) {}
-    fun setOnEpisodesRequestedCallback(callback: () -> Unit) {}
-    fun setOnEpisodeSelectedCallback(callback: (String) -> Unit) {}
-    fun setOnEpisodeStreamSelectedCallback(callback: (String) -> Unit) {}
-    fun setOnEpisodeFilterChangedCallback(callback: (String?) -> Unit) {}
-    fun setOnEpisodeReloadCallback(callback: () -> Unit) {}
-    fun setOnEpisodeBackCallback(callback: () -> Unit) {}
-    fun pushSourceData(
-        streams: List<com.nuvio.app.features.streams.StreamItem>,
-        groups: List<com.nuvio.app.features.streams.AddonStreamGroup>,
-        loading: Boolean,
-        selectedFilter: String?,
-        currentStreamUrl: String?,
-    ) {}
-    fun pushEpisodes(episodes: List<com.nuvio.app.features.details.MetaVideo>) {}
-    fun pushEpisodeStreamsData(
-        streams: List<com.nuvio.app.features.streams.StreamItem>,
-        groups: List<com.nuvio.app.features.streams.AddonStreamGroup>,
-        loading: Boolean,
-        selectedFilter: String?,
-        currentStreamUrl: String?,
-    ) {}
-    fun showEpisodeStreamsView(season: Int?, episode: Int?, title: String?) {}
-    fun dismissNativePanels() {}
-    fun switchSource(url: String, audioUrl: String?, headersJson: String?) {}
+    fun configureIosVideoOutput(settings: PlayerSettingsUiState) {}
 }
 
 internal fun sanitizePlaybackHeaders(headers: Map<String, String>?): Map<String, String> {

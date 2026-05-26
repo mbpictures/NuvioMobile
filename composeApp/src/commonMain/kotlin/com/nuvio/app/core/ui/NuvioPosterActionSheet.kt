@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,12 +33,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.features.home.MetaPreview
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.action_saved
 import nuvio.composeapp.generated.resources.episodes_cd_watched
 import nuvio.composeapp.generated.resources.hero_add_to_library
 import nuvio.composeapp.generated.resources.hero_mark_unwatched
@@ -148,6 +151,55 @@ fun NuvioAnimatedWatchedBadge(
         modifier = modifier,
     ) {
         NuvioWatchedBadge()
+    }
+}
+
+@Composable
+fun BoxScope.NuvioPosterWatchedOverlay(
+    isWatched: Boolean,
+    modifier: Modifier = Modifier,
+    padding: Dp = 6.dp,
+) {
+    NuvioAnimatedWatchedBadge(
+        isVisible = isWatched,
+        modifier = modifier
+            .align(Alignment.TopEnd)
+            .padding(padding),
+    )
+}
+
+@Composable
+fun NuvioBookmarkedBadge(
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Default.Bookmark,
+            contentDescription = stringResource(Res.string.action_saved),
+            tint = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.size(12.dp),
+        )
+    }
+}
+
+@Composable
+fun NuvioAnimatedBookmarkedBadge(
+    isVisible: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = modifier,
+    ) {
+        NuvioBookmarkedBadge()
     }
 }
 

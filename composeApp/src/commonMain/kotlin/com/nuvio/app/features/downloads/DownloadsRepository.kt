@@ -117,7 +117,7 @@ object DownloadsRepository {
     ): DownloadEnqueueResult {
         ensureLoaded()
 
-        val sourceUrl = stream.directPlaybackUrl
+        val sourceUrl = stream.playableDirectUrl
             ?.trim()
             ?.takeIf { it.isNotBlank() }
             ?: return DownloadEnqueueResult.MissingUrl
@@ -291,6 +291,8 @@ object DownloadsRepository {
 
     private fun startDownload(item: DownloadItem) {
         val request = DownloadPlatformRequest(
+            downloadId = item.id,
+            displayTitle = item.title,
             sourceUrl = item.sourceUrl,
             sourceHeaders = item.sourceHeaders,
             destinationFileName = item.fileName,

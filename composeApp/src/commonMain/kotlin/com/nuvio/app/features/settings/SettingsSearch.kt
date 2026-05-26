@@ -262,6 +262,8 @@ internal fun settingsSearchEntries(
         PlaybackSearchRow("nuvio-license", stringResource(Res.string.settings_licenses_attributions_nuvio_title), stringResource(Res.string.settings_licenses_attributions_nuvio_license)),
         PlaybackSearchRow("tmdb-attribution", stringResource(Res.string.settings_licenses_attributions_tmdb_title), stringResource(Res.string.settings_licenses_attributions_tmdb_body)),
         PlaybackSearchRow("trakt-attribution", stringResource(Res.string.settings_licenses_attributions_trakt_title), stringResource(Res.string.settings_licenses_attributions_trakt_body)),
+        PlaybackSearchRow("premiumize-attribution", stringResource(Res.string.settings_licenses_attributions_premiumize_title), stringResource(Res.string.settings_licenses_attributions_premiumize_body)),
+        PlaybackSearchRow("torbox-attribution", stringResource(Res.string.settings_licenses_attributions_torbox_title), stringResource(Res.string.settings_licenses_attributions_torbox_body)),
         PlaybackSearchRow("mdblist-attribution", stringResource(Res.string.settings_licenses_attributions_mdblist_title), stringResource(Res.string.settings_licenses_attributions_mdblist_body)),
         PlaybackSearchRow("introdb-attribution", stringResource(Res.string.settings_licenses_attributions_introdb_title), stringResource(Res.string.settings_licenses_attributions_introdb_body)),
         PlaybackSearchRow("imdb-datasets", stringResource(Res.string.settings_licenses_attributions_imdb_title), stringResource(Res.string.settings_licenses_attributions_imdb_body)),
@@ -427,12 +429,21 @@ internal fun settingsSearchEntries(
         pageLabel = playbackPage,
         section = playbackPlayer,
         icon = Icons.Rounded.PlayArrow,
-        rows = listOf(
+        rows = listOfNotNull(
             PlaybackSearchRow(
                 "loading-overlay",
                 stringResource(Res.string.settings_playback_show_loading_overlay),
                 stringResource(Res.string.settings_playback_show_loading_overlay_description),
             ),
+            PlaybackSearchRow(
+                "external-player",
+                stringResource(Res.string.settings_playback_external_player),
+                stringResource(Res.string.settings_playback_external_player_description_android),
+            ),
+            if (isIos) PlaybackSearchRow(
+                "external-player-app",
+                stringResource(Res.string.settings_playback_external_player_app),
+            ) else null,
             PlaybackSearchRow(
                 "hold-to-speed",
                 stringResource(Res.string.settings_playback_hold_to_speed),

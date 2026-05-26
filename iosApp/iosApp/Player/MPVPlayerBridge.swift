@@ -28,6 +28,37 @@ final class MPVPlayerBridgeImpl: NSObject, NuvioPlayerBridge {
     func seekTo(positionMs: Int64) { playerVC?.seekToMs(positionMs) }
     func seekBy(offsetMs: Int64) { playerVC?.seekByMs(offsetMs) }
     func retry() { playerVC?.retryPlayback() }
+    func configureVideoOutput(
+        hardwareDecoder: String,
+        targetColorspaceHint: Bool,
+        toneMapping: String,
+        hdrComputePeak: Bool,
+        targetPrimaries: String,
+        targetTransfer: String,
+        extendedDynamicRange: Bool,
+        deband: Bool,
+        interpolation: Bool,
+        brightness: Int32,
+        contrast: Int32,
+        saturation: Int32,
+        gamma: Int32
+    ) {
+        playerVC?.configureVideoOutput(
+            hardwareDecoder: hardwareDecoder,
+            targetColorspaceHint: targetColorspaceHint,
+            toneMapping: toneMapping,
+            hdrComputePeak: hdrComputePeak,
+            targetPrimaries: targetPrimaries,
+            targetTransfer: targetTransfer,
+            extendedDynamicRange: extendedDynamicRange,
+            deband: deband,
+            interpolation: interpolation,
+            brightness: Int(brightness),
+            contrast: Int(contrast),
+            saturation: Int(saturation),
+            gamma: Int(gamma)
+        )
+    }
     func setPlaybackSpeed(speed: Float) { playerVC?.setSpeed(speed) }
     func setResizeMode(mode: Int32) { playerVC?.setResize(Int(mode)) }
 
@@ -151,6 +182,8 @@ final class MPVPlayerViewController: UIViewController {
     private let errorStateLock = NSLock()
     private var metalLayer = MetalLayer()
     private var lastAppliedDrawableSize: CGSize = .zero
+    private var lastBoundsForVoNudge: CGSize = .zero
+    private var voNudgeWorkItem: DispatchWorkItem?
     private var pendingLoadRequest: PendingLoadRequest?
     private var pendingLoadRetryWorkItem: DispatchWorkItem?
     private var mpv: OpaquePointer?
@@ -204,6 +237,7 @@ final class MPVPlayerViewController: UIViewController {
         metalLayer.contentsScale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale
         metalLayer.framebufferOnly = true
         metalLayer.backgroundColor = UIColor.black.cgColor
+        metalLayer.wantsExtendedDynamicRangeContent = true
         view.layer.addSublayer(metalLayer)
         layoutMetalLayer()
 
@@ -253,8 +287,39 @@ final class MPVPlayerViewController: UIViewController {
         if drawableSize != lastAppliedDrawableSize {
             metalLayer.drawableSize = drawableSize
             lastAppliedDrawableSize = drawableSize
+            scheduleVideoOutputNudgeIfNeeded(newSize: bounds.size)
         }
         CATransaction.commit()
+    }
+
+    /// MoltenVK doesn't reliably surface VK_ERROR_OUT_OF_DATE_KHR when CAMetalLayer's
+    /// drawableSize changes on a running swapchain, so mpv's vulkan VO would keep
+    /// rendering at the old extent inside the new drawable. Toggling `vid` off and
+    /// back on forces mpv to rebuild its video pipeline against the current layer
+    /// size. The trade-off is a short keyframe re-seek pause during rotation; tried
+    /// masking it with a snapshot overlay and it produced worse artifacts than the
+    /// pause itself.
+    private func scheduleVideoOutputNudgeIfNeeded(newSize: CGSize) {
+        if lastBoundsForVoNudge == .zero {
+            lastBoundsForVoNudge = newSize
+            return
+        }
+        let widthDelta = abs(newSize.width - lastBoundsForVoNudge.width)
+        let heightDelta = abs(newSize.height - lastBoundsForVoNudge.height)
+        guard widthDelta > 1 || heightDelta > 1 else { return }
+        lastBoundsForVoNudge = newSize
+
+        voNudgeWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, let mpv = self.mpv else { return }
+            mpv_set_property_string(mpv, "vid", "no")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                guard let self, let mpv = self.mpv else { return }
+                mpv_set_property_string(mpv, "vid", "auto")
+            }
+        }
+        voNudgeWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
     }
 
     // MARK: - MPV Setup
@@ -273,7 +338,12 @@ final class MPVPlayerViewController: UIViewController {
         checkError(mpv_set_option_string(mpv, "gpu-api", "vulkan"))
         checkError(mpv_set_option_string(mpv, "gpu-context", "moltenvk"))
         checkError(mpv_set_option_string(mpv, "hwdec", "auto"))
-        checkError(mpv_set_option_string(mpv, "vulkan-swap-mode", "fifo"))
+        checkError(mpv_set_option_string(mpv, "audio-channels", "stereo"))
+        checkError(mpv_set_option_string(mpv, "audio-fallback-to-null", "yes"))
+        // Mailbox triple-buffers and reacts to CAMetalLayer.drawableSize changes more
+        // reliably than fifo on MoltenVK — without it, rotating the device leaves
+        // mpv's vulkan VO rendering at the old extent inside the new (larger) drawable.
+        checkError(mpv_set_option_string(mpv, "vulkan-swap-mode", "mailbox"))
         checkError(mpv_set_option_string(mpv, "vulkan-queue-count", "1"))
         checkError(mpv_set_option_string(mpv, "vulkan-async-compute", "no"))
         checkError(mpv_set_option_string(mpv, "vulkan-async-transfer", "no"))
@@ -284,7 +354,7 @@ final class MPVPlayerViewController: UIViewController {
         checkError(mpv_set_option_string(mpv, "keep-open", "yes"))
         checkError(mpv_set_option_string(mpv, "target-colorspace-hint", "yes"))
         checkError(mpv_set_option_string(mpv, "tone-mapping", "auto"))
-        checkError(mpv_set_option_string(mpv, "hdr-compute-peak", "no"))
+        checkError(mpv_set_option_string(mpv, "hdr-compute-peak", "yes"))
 
         checkError(mpv_initialize(mpv))
 
@@ -312,12 +382,12 @@ final class MPVPlayerViewController: UIViewController {
     @objc private func enterBackground() {
         guard mpv != nil else { return }
         pausePlayback()
-        checkError(mpv_set_option_string(mpv, "vid", "no"))
+        setStringProperty("vid", "no")
     }
 
     @objc private func enterForeground() {
         guard mpv != nil else { return }
-        checkError(mpv_set_option_string(mpv, "vid", "auto"))
+        setStringProperty("vid", "auto")
         playPlayback()
     }
 
@@ -433,6 +503,38 @@ final class MPVPlayerViewController: UIViewController {
         }
     }
 
+    func configureVideoOutput(
+        hardwareDecoder: String,
+        targetColorspaceHint: Bool,
+        toneMapping: String,
+        hdrComputePeak: Bool,
+        targetPrimaries: String,
+        targetTransfer: String,
+        extendedDynamicRange: Bool,
+        deband: Bool,
+        interpolation: Bool,
+        brightness: Int,
+        contrast: Int,
+        saturation: Int,
+        gamma: Int
+    ) {
+        metalLayer.wantsExtendedDynamicRangeContent = extendedDynamicRange
+        guard mpv != nil else { return }
+
+        setStringProperty("hwdec", hardwareDecoder)
+        setStringProperty("target-colorspace-hint", targetColorspaceHint ? "yes" : "no")
+        setStringProperty("tone-mapping", toneMapping)
+        setStringProperty("hdr-compute-peak", hdrComputePeak ? "yes" : "no")
+        setStringProperty("target-prim", targetPrimaries)
+        setStringProperty("target-trc", targetTransfer)
+        setStringProperty("deband", deband ? "yes" : "no")
+        setStringProperty("interpolation", interpolation ? "yes" : "no")
+        setVideoEqualizer("brightness", brightness)
+        setVideoEqualizer("contrast", contrast)
+        setVideoEqualizer("saturation", saturation)
+        setVideoEqualizer("gamma", gamma)
+    }
+
     func setSpeed(_ speed: Float) {
         guard mpv != nil else { return }
         var s = Double(speed)
@@ -443,14 +545,14 @@ final class MPVPlayerViewController: UIViewController {
         guard mpv != nil else { return }
         switch mode {
         case 1: // Fill
-            checkError(mpv_set_option_string(mpv, "panscan", "1.0"))
-            checkError(mpv_set_option_string(mpv, "video-unscaled", "no"))
+            setStringProperty("panscan", "1.0")
+            setStringProperty("video-unscaled", "no")
         case 2: // Zoom
-            checkError(mpv_set_option_string(mpv, "panscan", "1.0"))
-            checkError(mpv_set_option_string(mpv, "video-unscaled", "no"))
+            setStringProperty("panscan", "1.0")
+            setStringProperty("video-unscaled", "no")
         default: // Fit
-            checkError(mpv_set_option_string(mpv, "panscan", "0.0"))
-            checkError(mpv_set_option_string(mpv, "video-unscaled", "no"))
+            setStringProperty("panscan", "0.0")
+            setStringProperty("video-unscaled", "no")
         }
     }
 
@@ -465,7 +567,7 @@ final class MPVPlayerViewController: UIViewController {
     func selectSubtitle(_ trackId: Int) {
         guard mpv != nil else { return }
         if trackId < 0 {
-            checkError(mpv_set_option_string(mpv, "sid", "no"))
+            setStringProperty("sid", "no")
         } else {
             var id = Int64(trackId)
             mpv_set_property(mpv, "sid", MPV_FORMAT_INT64, &id)
@@ -488,7 +590,7 @@ final class MPVPlayerViewController: UIViewController {
                 command("sub-remove", args: ["\(id)"], checkForErrors: false)
             }
         }
-        checkError(mpv_set_option_string(mpv, "sid", "no"))
+        setStringProperty("sid", "no")
     }
 
     func removeExternalSubtitlesAndSelect(_ trackId: Int) {
@@ -505,7 +607,7 @@ final class MPVPlayerViewController: UIViewController {
         if trackId >= 0 {
             selectSubtitle(trackId)
         } else {
-            checkError(mpv_set_option_string(mpv, "sid", "no"))
+            setStringProperty("sid", "no")
         }
     }
 
@@ -530,6 +632,8 @@ final class MPVPlayerViewController: UIViewController {
         NotificationCenter.default.removeObserver(self)
         pendingLoadRetryWorkItem?.cancel()
         pendingLoadRetryWorkItem = nil
+        voNudgeWorkItem?.cancel()
+        voNudgeWorkItem = nil
         pendingLoadRequest = nil
         clearPlaybackError()
         guard let ctx = mpv else { return }
@@ -822,6 +926,17 @@ final class MPVPlayerViewController: UIViewController {
         guard mpv != nil else { return }
         var data: Int = flag ? 1 : 0
         mpv_set_property(mpv, name, MPV_FORMAT_FLAG, &data)
+    }
+
+    private func setStringProperty(_ name: String, _ value: String) {
+        guard mpv != nil else { return }
+        checkError(mpv_set_property_string(mpv, name, value))
+    }
+
+    private func setVideoEqualizer(_ name: String, _ value: Int) {
+        guard mpv != nil else { return }
+        var clamped = Int64(max(-100, min(100, value)))
+        checkError(mpv_set_property(mpv, name, MPV_FORMAT_INT64, &clamped))
     }
 
     private func getInt(_ name: String) -> Int {

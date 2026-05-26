@@ -18,6 +18,10 @@
 
 </div>
 
+> **Unofficial Fork Notice**
+>
+> This is an unofficial fork of [NuvioMedia/NuvioMobile](https://github.com/NuvioMedia/NuvioMobile), maintained independently from the upstream project.
+
 ## About
 
 Nuvio Desktop brings the Nuvio media experience to desktop with a Compose Multiplatform interface, profile-aware library flows, watch progress, collection tools, and Stremio addon ecosystem integration.
