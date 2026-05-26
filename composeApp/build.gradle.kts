@@ -191,10 +191,7 @@ val generatedRuntimeConfigDir = layout.buildDirectory.dir("generated/runtime-con
 
 val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generateRuntimeConfigs") {
     outputDir.set(generatedRuntimeConfigDir)
-    val localPropsFile = rootProject.file("local.properties")
-    if (localPropsFile.exists()) {
-        localPropertiesFile.set(localPropsFile)
-    }
+    localPropertiesFile.set(rootProject.layout.projectDirectory.file("local.properties"))
     appVersionName.set(releaseAppVersionName)
     appVersionCode.set(releaseAppVersionCode)
 }
@@ -379,14 +376,6 @@ android {
             ndk {
                 debugSymbolLevel = "FULL"
             }
-        }
-    }
-    splits {
-        abi {
-            isEnable = providers.gradleProperty("nuvio.splitAbi").orNull == "true"
-            reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk = false
         }
     }
     compileOptions {
