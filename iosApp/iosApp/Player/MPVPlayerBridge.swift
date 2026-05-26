@@ -182,6 +182,8 @@ final class MPVPlayerViewController: UIViewController {
     private let errorStateLock = NSLock()
     private var metalLayer = MetalLayer()
     private var lastAppliedDrawableSize: CGSize = .zero
+    private var lastBoundsForVoNudge: CGSize = .zero
+    private var voNudgeWorkItem: DispatchWorkItem?
     private var pendingLoadRequest: PendingLoadRequest?
     private var pendingLoadRetryWorkItem: DispatchWorkItem?
     private var mpv: OpaquePointer?
@@ -285,8 +287,39 @@ final class MPVPlayerViewController: UIViewController {
         if drawableSize != lastAppliedDrawableSize {
             metalLayer.drawableSize = drawableSize
             lastAppliedDrawableSize = drawableSize
+            scheduleVideoOutputNudgeIfNeeded(newSize: bounds.size)
         }
         CATransaction.commit()
+    }
+
+    /// MoltenVK doesn't reliably surface VK_ERROR_OUT_OF_DATE_KHR when CAMetalLayer's
+    /// drawableSize changes on a running swapchain, so mpv's vulkan VO would keep
+    /// rendering at the old extent inside the new drawable. Toggling `vid` off and
+    /// back on forces mpv to rebuild its video pipeline against the current layer
+    /// size. The trade-off is a short keyframe re-seek pause during rotation; tried
+    /// masking it with a snapshot overlay and it produced worse artifacts than the
+    /// pause itself.
+    private func scheduleVideoOutputNudgeIfNeeded(newSize: CGSize) {
+        if lastBoundsForVoNudge == .zero {
+            lastBoundsForVoNudge = newSize
+            return
+        }
+        let widthDelta = abs(newSize.width - lastBoundsForVoNudge.width)
+        let heightDelta = abs(newSize.height - lastBoundsForVoNudge.height)
+        guard widthDelta > 1 || heightDelta > 1 else { return }
+        lastBoundsForVoNudge = newSize
+
+        voNudgeWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, let mpv = self.mpv else { return }
+            mpv_set_property_string(mpv, "vid", "no")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                guard let self, let mpv = self.mpv else { return }
+                mpv_set_property_string(mpv, "vid", "auto")
+            }
+        }
+        voNudgeWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
     }
 
     // MARK: - MPV Setup
@@ -307,7 +340,10 @@ final class MPVPlayerViewController: UIViewController {
         checkError(mpv_set_option_string(mpv, "hwdec", "auto"))
         checkError(mpv_set_option_string(mpv, "audio-channels", "stereo"))
         checkError(mpv_set_option_string(mpv, "audio-fallback-to-null", "yes"))
-        checkError(mpv_set_option_string(mpv, "vulkan-swap-mode", "fifo"))
+        // Mailbox triple-buffers and reacts to CAMetalLayer.drawableSize changes more
+        // reliably than fifo on MoltenVK — without it, rotating the device leaves
+        // mpv's vulkan VO rendering at the old extent inside the new (larger) drawable.
+        checkError(mpv_set_option_string(mpv, "vulkan-swap-mode", "mailbox"))
         checkError(mpv_set_option_string(mpv, "vulkan-queue-count", "1"))
         checkError(mpv_set_option_string(mpv, "vulkan-async-compute", "no"))
         checkError(mpv_set_option_string(mpv, "vulkan-async-transfer", "no"))
@@ -596,6 +632,8 @@ final class MPVPlayerViewController: UIViewController {
         NotificationCenter.default.removeObserver(self)
         pendingLoadRetryWorkItem?.cancel()
         pendingLoadRetryWorkItem = nil
+        voNudgeWorkItem?.cancel()
+        voNudgeWorkItem = nil
         pendingLoadRequest = nil
         clearPlaybackError()
         guard let ctx = mpv else { return }
