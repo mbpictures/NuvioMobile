@@ -136,21 +136,26 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     }
 }
 
-abstract class RenameReleaseDmgTask : DefaultTask() {
+abstract class RenameReleaseArtifactTask : DefaultTask() {
     @get:Input
     abstract val versionName: Property<String>
 
+    @get:Input
+    abstract val extension: Property<String>
+
     @get:OutputDirectory
-    abstract val dmgDirectory: DirectoryProperty
+    abstract val artifactDirectory: DirectoryProperty
 
     @TaskAction
     fun renameArtifact() {
-        val dmgDir = dmgDirectory.get().asFile
-        val targetFile = dmgDir.resolve("Nuvio-${versionName.get()}.dmg")
-        val sourceFile = dmgDir.listFiles()
-            ?.filter { it.extension == "dmg" && it.name.startsWith("Nuvio-") }
+        val dir = artifactDirectory.get().asFile
+        if (!dir.exists()) return
+        val ext = extension.get()
+        val targetFile = dir.resolve("Nuvio-${versionName.get()}.$ext")
+        val sourceFile = dir.listFiles()
+            ?.filter { it.extension == ext && it.name.startsWith("Nuvio-") }
             ?.maxByOrNull { it.lastModified() }
-            ?: error("No DMG output found in ${dmgDir.path}")
+            ?: return
 
         if (sourceFile.absolutePath != targetFile.absolutePath) {
             targetFile.delete()
@@ -362,7 +367,11 @@ compose.desktop {
         nativeDistributions {
             packageName = "Nuvio"
             modules("java.net.http")
-            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg)
+            targetFormats(
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe,
+            )
             macOS {
                 dockName = "Nuvio"
                 iconFile.set(project.file("desktop-icons/nuvio.icns"))
@@ -373,17 +382,46 @@ compose.desktop {
                     """.trimIndent()
                 }
             }
+            windows {
+                // Stable identity for in-place upgrades; never change once published.
+                upgradeUuid = "7B3F8C2E-4A1D-4E5F-9D6B-1C2A3B4C5D6E"
+                menuGroup = "Nuvio"
+                menu = true
+                shortcut = true
+                dirChooser = true
+                perUserInstall = true
+                val winIcon = project.file("desktop-icons/nuvio.ico")
+                if (winIcon.exists()) {
+                    iconFile.set(winIcon)
+                }
+            }
         }
     }
 }
 
-val renameReleaseDmgArtifact = tasks.register<RenameReleaseDmgTask>("renameReleaseDmgArtifact") {
+val renameReleaseDmgArtifact = tasks.register<RenameReleaseArtifactTask>("renameReleaseDmgArtifact") {
     versionName.set(releaseAppVersionName)
-    dmgDirectory.set(layout.buildDirectory.dir("compose/binaries/main-release/dmg"))
+    extension.set("dmg")
+    artifactDirectory.set(layout.buildDirectory.dir("compose/binaries/main-release/dmg"))
 }
 
-tasks.matching { it.name == "packageReleaseDistributionForCurrentOS" || it.name == "packageReleaseDmg" }.configureEach {
-    finalizedBy(renameReleaseDmgArtifact)
+val renameReleaseMsiArtifact = tasks.register<RenameReleaseArtifactTask>("renameReleaseMsiArtifact") {
+    versionName.set(releaseAppVersionName)
+    extension.set("msi")
+    artifactDirectory.set(layout.buildDirectory.dir("compose/binaries/main-release/msi"))
+}
+
+val renameReleaseExeArtifact = tasks.register<RenameReleaseArtifactTask>("renameReleaseExeArtifact") {
+    versionName.set(releaseAppVersionName)
+    extension.set("exe")
+    artifactDirectory.set(layout.buildDirectory.dir("compose/binaries/main-release/exe"))
+}
+
+tasks.matching { it.name == "packageReleaseDmg" }.configureEach { finalizedBy(renameReleaseDmgArtifact) }
+tasks.matching { it.name == "packageReleaseMsi" }.configureEach { finalizedBy(renameReleaseMsiArtifact) }
+tasks.matching { it.name == "packageReleaseExe" }.configureEach { finalizedBy(renameReleaseExeArtifact) }
+tasks.matching { it.name == "packageReleaseDistributionForCurrentOS" }.configureEach {
+    finalizedBy(renameReleaseDmgArtifact, renameReleaseMsiArtifact, renameReleaseExeArtifact)
 }
 
 // The legacy Swift bridge (MPVKit/Sources/DesktopMPVBridge) is no longer used. macOS playback
