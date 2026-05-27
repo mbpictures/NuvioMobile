@@ -33,6 +33,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -76,6 +79,7 @@ import com.nuvio.app.features.watchprogress.WatchProgressClock
 import com.nuvio.app.features.watchprogress.WatchProgressPlaybackSession
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
+import com.nuvio.app.isDesktop
 import com.nuvio.app.isIos
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
@@ -2018,6 +2022,25 @@ fun PlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { layoutSize = it }
+                .then(
+                    if (isDesktop) {
+                        Modifier.pointerInput(playerControlsLocked) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    val isMouseMove = (event.type == PointerEventType.Move ||
+                                        event.type == PointerEventType.Enter) &&
+                                        event.changes.any { it.type == PointerType.Mouse }
+                                    if (isMouseMove && !playerControlsLocked) {
+                                        controlsVisible = true
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Modifier
+                    },
+                )
                 .pointerInput(layoutSize) {
                     detectTapGestures(
                         onPress = {
