@@ -33,6 +33,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
@@ -2028,6 +2036,12 @@ fun PlayerScreen(
 
         val systemGestureInsets = WindowInsets.systemGestures
         val gestureLayoutDirection = LocalLayoutDirection.current
+        val playerKeyFocus = remember { FocusRequester() }
+        if (isDesktop) {
+            LaunchedEffect(Unit) {
+                runCatching { playerKeyFocus.requestFocus() }
+            }
+        }
 
         Box(
             modifier = Modifier
@@ -2035,19 +2049,51 @@ fun PlayerScreen(
                 .onSizeChanged { layoutSize = it }
                 .then(
                     if (isDesktop) {
-                        Modifier.pointerInput(playerControlsLocked) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                    val isMouseMove = (event.type == PointerEventType.Move ||
-                                        event.type == PointerEventType.Enter) &&
-                                        event.changes.any { it.type == PointerType.Mouse }
-                                    if (isMouseMove && !playerControlsLocked) {
-                                        controlsVisible = true
+                        Modifier
+                            .focusRequester(playerKeyFocus)
+                            .focusable()
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) {
+                                    return@onPreviewKeyEvent false
+                                }
+                                when (event.key) {
+                                    Key.Spacebar -> {
+                                        togglePlayback()
+                                        true
+                                    }
+                                    Key.DirectionLeft -> {
+                                        seekBy(-10_000L)
+                                        true
+                                    }
+                                    Key.DirectionRight -> {
+                                        seekBy(10_000L)
+                                        true
+                                    }
+                                    Key.Escape -> {
+                                        val ctrl = fullscreenController
+                                        if (ctrl != null && ctrl.isFullscreen) {
+                                            ctrl.toggle()
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                    else -> false
+                                }
+                            }
+                            .pointerInput(playerControlsLocked) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        val isMouseMove = (event.type == PointerEventType.Move ||
+                                            event.type == PointerEventType.Enter) &&
+                                            event.changes.any { it.type == PointerType.Mouse }
+                                        if (isMouseMove && !playerControlsLocked) {
+                                            controlsVisible = true
+                                        }
                                     }
                                 }
                             }
-                        }
                     } else {
                         Modifier
                     },
