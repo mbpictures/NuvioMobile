@@ -200,21 +200,55 @@ private object AppUpdaterRepository {
                 asset.contentType == "application/vnd.android.package-archive"
         }
         if (apkAssets.isEmpty()) return null
-        if (apkAssets.size == 1) return apkAssets.first()
+
+        val flavor = AppUpdaterPlatform.getDistributionFlavor()
+        val knownFlavors = listOf("full", "playstore")
+        val flavorFiltered = if (flavor.isNotBlank()) {
+            val matchingFlavor = apkAssets.filter { containsTokenIgnoreCase(it.name, flavor) }
+            if (matchingFlavor.isNotEmpty()) {
+                matchingFlavor
+            } else {
+                val otherFlavors = knownFlavors.filter { !it.equals(flavor, ignoreCase = true) }
+                apkAssets.filterNot { asset -> otherFlavors.any { other -> containsTokenIgnoreCase(asset.name, other) } }
+                    .ifEmpty { apkAssets }
+            }
+        } else {
+            apkAssets
+        }
+
+        if (flavorFiltered.size == 1) return flavorFiltered.first()
 
         val supportedAbis = AppUpdaterPlatform.getSupportedAbis()
         for (abi in supportedAbis) {
-            val candidate = apkAssets.firstOrNull { asset ->
-                asset.name.contains(abi, ignoreCase = true)
+            val candidate = flavorFiltered.firstOrNull { asset ->
+                containsTokenIgnoreCase(asset.name, abi)
             }
             if (candidate != null) return candidate
         }
 
-        return apkAssets.firstOrNull { asset ->
+        return flavorFiltered.firstOrNull { asset ->
             val name = asset.name.lowercase()
             name.contains("universal") || name.contains("all")
-        } ?: apkAssets.first()
+        } ?: flavorFiltered.first()
     }
+
+    private fun containsTokenIgnoreCase(name: String, token: String): Boolean {
+        if (token.isEmpty()) return false
+        val haystack = name.lowercase()
+        val needle = token.lowercase()
+        var fromIndex = 0
+        while (true) {
+            val index = haystack.indexOf(needle, startIndex = fromIndex)
+            if (index < 0) return false
+            val beforeOk = index == 0 || !isAbiNameChar(haystack[index - 1])
+            val end = index + needle.length
+            val afterOk = end >= haystack.length || !isAbiNameChar(haystack[end])
+            if (beforeOk && afterOk) return true
+            fromIndex = index + 1
+        }
+    }
+
+    private fun isAbiNameChar(c: Char): Boolean = c.isLetterOrDigit() || c == '_'
 }
 
 class AppUpdaterController internal constructor(
