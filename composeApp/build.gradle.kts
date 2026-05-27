@@ -386,18 +386,9 @@ tasks.matching { it.name == "packageReleaseDistributionForCurrentOS" || it.name 
     finalizedBy(renameReleaseDmgArtifact)
 }
 
-val buildDesktopMpvBridge = tasks.register<Exec>("buildDesktopMpvBridge") {
-    onlyIf { System.getProperty("os.name").contains("Mac", ignoreCase = true) }
-    workingDir = rootProject.file("MPVKit")
-    commandLine("swift", "build", "-c", "release", "--product", "DesktopMPVBridge")
-    inputs.file(rootProject.file("MPVKit/Package.swift"))
-    inputs.dir(rootProject.file("MPVKit/Sources/DesktopMPVBridge"))
-    outputs.dir(rootProject.file("MPVKit/.build"))
-}
-
-tasks.matching { it.name == "run" || it.name == "desktopRun" }.configureEach {
-    dependsOn(buildDesktopMpvBridge)
-}
+// The legacy Swift bridge (MPVKit/Sources/DesktopMPVBridge) is no longer used. macOS playback
+// now loads libmpv.dylib directly via JNA, mirroring the Windows backend. See fetchMacOSLibmpv
+// below for how the dylibs are fetched and patched.
 
 abstract class FetchWindowsLibmpvTask : DefaultTask() {
     @get:Input
@@ -469,10 +460,75 @@ val fetchWindowsLibmpv = tasks.register<FetchWindowsLibmpvTask>("fetchWindowsLib
     dllFile.set(libmpvResourceRoot.map { it.file("win32-x86-64/libmpv-2.dll") })
 }
 
+abstract class FetchMacOSLibmpvTask : DefaultTask() {
+    @get:Input
+    abstract val archiveUrl: Property<String>
+
+    @get:OutputFile
+    abstract val archiveFile: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun fetch() {
+        val archive = archiveFile.get().asFile
+        if (!archive.exists() || archive.length() < 1_000_000L) {
+            archive.parentFile.mkdirs()
+            logger.lifecycle("Downloading libmpv archive: ${archiveUrl.get()}")
+            URI(archiveUrl.get()).toURL().openStream().use { input ->
+                archive.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+
+        val outDir = outputDir.get().asFile
+        outDir.deleteRecursively()
+        outDir.mkdirs()
+
+        val tarProcess = ProcessBuilder(
+            "tar", "-xzf", archive.absolutePath, "-C", outDir.absolutePath, "--strip-components=1",
+        ).redirectErrorStream(true).start()
+        val tarStdout = tarProcess.inputStream.bufferedReader().readText()
+        if (tarProcess.waitFor() != 0) {
+            throw GradleException("Failed to extract libmpv archive:\n$tarStdout")
+        }
+
+        val dylibs = outDir.listFiles { f -> f.isFile && f.name.endsWith(".dylib") }
+            ?: throw GradleException("No dylibs found in ${outDir.absolutePath}")
+        if (dylibs.none { it.name == "libmpv.dylib" }) {
+            throw GradleException("libmpv.dylib missing from extracted archive at ${outDir.absolutePath}")
+        }
+
+        // The upstream dylibs reference siblings via @rpath/<name>, but the LC_RPATH entries
+        // point at Nix-store paths from the build host. Add @loader_path so dyld finds the
+        // sibling dylibs at runtime when they sit next to libmpv.dylib.
+        dylibs.forEach { dylib ->
+            val patch = ProcessBuilder("install_name_tool", "-add_rpath", "@loader_path", dylib.absolutePath)
+                .redirectErrorStream(true).start()
+            val out = patch.inputStream.bufferedReader().readText()
+            if (patch.waitFor() != 0 && "would duplicate path" !in out) {
+                throw GradleException("install_name_tool failed for ${dylib.name}:\n$out")
+            }
+        }
+        logger.lifecycle("Extracted ${dylibs.size} dylibs into ${outDir.absolutePath}")
+    }
+}
+
+val macOSLibmpvArchiveUrl =
+    "https://github.com/media-kit/libmpv-darwin-build/releases/download/v0.7.0/libmpv-libs_v0.7.0_macos-universal-video-default.tar.gz"
+
+val fetchMacOSLibmpv = tasks.register<FetchMacOSLibmpvTask>("fetchMacOSLibmpv") {
+    onlyIf { org.gradle.internal.os.OperatingSystem.current().isMacOsX }
+    archiveUrl.set(macOSLibmpvArchiveUrl)
+    archiveFile.set(layout.buildDirectory.file("libmpv-cache/macos-libmpv.tar.gz"))
+    outputDir.set(libmpvResourceRoot.map { it.dir("macos-universal") })
+}
+
 kotlin {
     sourceSets {
         val desktopMain by getting {
             resources.srcDir(fetchWindowsLibmpv.map { libmpvResourceRoot.get().asFile })
+            resources.srcDir(fetchMacOSLibmpv.map { libmpvResourceRoot.get().asFile })
         }
     }
 }

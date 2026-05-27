@@ -164,7 +164,10 @@ internal object WindowsMpvPlayerBackend : DesktopPlaybackBackend {
     }
 }
 
-private class MpvSession(private val mpv: LibMpv) {
+internal class MpvSession(
+    private val mpv: LibMpv,
+    private val options: MpvSessionOptions = MpvSessionOptions(),
+) {
     val handle: Pointer
     private var renderCtx: Pointer? = null
     private val shutdown = AtomicBoolean(false)
@@ -201,14 +204,18 @@ private class MpvSession(private val mpv: LibMpv) {
             mpv.mpv_set_option_string(handle, "cursor-autohide", "no")
             mpv.mpv_set_option_string(handle, "keep-open", "yes")
             mpv.mpv_set_option_string(handle, "idle", "yes")
-            mpv.mpv_set_option_string(handle, "hwdec", "auto-safe")
+            mpv.mpv_set_option_string(handle, "hwdec", options.hwdec)
             mpv.mpv_set_option_string(handle, "ytdl", "no")
             mpv.mpv_set_option_string(handle, "terminal", "no")
             mpv.mpv_set_option_string(handle, "audio-client-name", "Nuvio")
-            mpv.mpv_set_option_string(handle, "user-agent", DEFAULT_USER_AGENT)
+            mpv.mpv_set_option_string(handle, "user-agent", options.userAgent)
 
             val rc = mpv.mpv_initialize(handle)
             if (rc < 0) throw IllegalStateException("mpv_initialize failed: ${errorText(rc)}")
+
+            if (options.logLevel != null) {
+                mpv.mpv_request_log_messages(handle, options.logLevel)
+            }
 
             createRenderContext()
         } catch (t: Throwable) {
@@ -316,8 +323,7 @@ private class MpvSession(private val mpv: LibMpv) {
             add("loadfile")
             add(url)
             add("replace")
-            add("0")
-            if (!audioUrl.isNullOrBlank()) add("audio-files-append=\"$audioUrl\"")
+            if (!audioUrl.isNullOrBlank()) add("audio-files-append=$audioUrl")
         }
         command(args)
         reportedError = null
@@ -531,6 +537,17 @@ private class MpvSession(private val mpv: LibMpv) {
             event.loadFrom(ptr)
             when (event.event_id) {
                 MPV_EVENT_SHUTDOWN -> return
+                MPV_EVENT_LOG_MESSAGE -> {
+                    val dataPtr = event.data
+                    if (dataPtr != null) {
+                        val log = MpvEventLogMessage()
+                        log.loadFrom(dataPtr)
+                        val prefix = log.prefix?.getString(0, "UTF-8") ?: "?"
+                        val level = log.level?.getString(0, "UTF-8") ?: "?"
+                        val text = log.text?.getString(0, "UTF-8")?.trimEnd() ?: ""
+                        System.err.println("[mpv][$level][$prefix] $text")
+                    }
+                }
                 MPV_EVENT_END_FILE -> {
                     val dataPtr = event.data
                     if (dataPtr != null) {
@@ -550,12 +567,18 @@ private class MpvSession(private val mpv: LibMpv) {
     }
 }
 
-private inline fun <reified T : Structure> T.toArrayContiguous(size: Int): Array<T> {
+internal data class MpvSessionOptions(
+    val hwdec: String = "auto-safe",
+    val userAgent: String = DEFAULT_USER_AGENT,
+    val logLevel: String? = null,
+)
+
+internal inline fun <reified T : Structure> T.toArrayContiguous(size: Int): Array<T> {
     @Suppress("UNCHECKED_CAST")
     return toArray(size) as Array<T>
 }
 
-private data class MpvTrack(
+internal data class MpvTrack(
     val id: Long,
     val type: String,
     val title: String?,
@@ -565,7 +588,7 @@ private data class MpvTrack(
     val external: Boolean?,
 )
 
-private fun Color.toMpvHex(): String {
+internal fun Color.toMpvHex(): String {
     val r = (red * 255).toInt().coerceIn(0, 255)
     val g = (green * 255).toInt().coerceIn(0, 255)
     val b = (blue * 255).toInt().coerceIn(0, 255)
@@ -573,18 +596,19 @@ private fun Color.toMpvHex(): String {
     return "#%02X%02X%02X%02X".format(a, r, g, b)
 }
 
-private const val DEFAULT_USER_AGENT =
+internal const val DEFAULT_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 
-private const val MPV_EVENT_SHUTDOWN = 1
-private const val MPV_EVENT_END_FILE = 7
-private const val MPV_END_FILE_REASON_ERROR = 4
+internal const val MPV_EVENT_SHUTDOWN = 1
+internal const val MPV_EVENT_LOG_MESSAGE = 2
+internal const val MPV_EVENT_END_FILE = 7
+internal const val MPV_END_FILE_REASON_ERROR = 4
 
-private const val MPV_RENDER_PARAM_API_TYPE = 1
-private const val MPV_RENDER_PARAM_SW_SIZE = 17
-private const val MPV_RENDER_PARAM_SW_FORMAT = 18
-private const val MPV_RENDER_PARAM_SW_STRIDE = 19
-private const val MPV_RENDER_PARAM_SW_POINTER = 20
+internal const val MPV_RENDER_PARAM_API_TYPE = 1
+internal const val MPV_RENDER_PARAM_SW_SIZE = 17
+internal const val MPV_RENDER_PARAM_SW_FORMAT = 18
+internal const val MPV_RENDER_PARAM_SW_STRIDE = 19
+internal const val MPV_RENDER_PARAM_SW_POINTER = 20
 
 @Structure.FieldOrder("event_id", "error", "reply_userdata", "data")
 internal open class MpvEvent : Structure() {
@@ -625,6 +649,19 @@ internal open class MpvRenderParam : Structure() {
     @JvmField var data: Pointer? = null
 }
 
+@Structure.FieldOrder("prefix", "level", "text", "log_level")
+internal open class MpvEventLogMessage : Structure() {
+    @JvmField var prefix: Pointer? = null
+    @JvmField var level: Pointer? = null
+    @JvmField var text: Pointer? = null
+    @JvmField var log_level: Int = 0
+
+    fun loadFrom(p: Pointer) {
+        useMemory(p)
+        read()
+    }
+}
+
 internal interface MpvRenderUpdateCallback : Callback {
     fun invoke(ctx: Pointer?)
 }
@@ -633,9 +670,16 @@ internal interface LibMpv : Library {
     companion object {
         val INSTANCE: LibMpv by lazy { loadLibrary() }
 
+        private val isMac: Boolean
+            get() = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
+
         private fun loadLibrary(): LibMpv {
             extendJnaSearchPath()
-            val candidates = listOf("libmpv-2", "mpv-2", "mpv-1", "libmpv")
+            val candidates = if (isMac) {
+                listOf("mpv", "mpv.2", "mpv-2")
+            } else {
+                listOf("libmpv-2", "mpv-2", "mpv-1", "libmpv")
+            }
             for (name in candidates) {
                 try {
                     return Native.load(name, LibMpv::class.java)
@@ -643,9 +687,15 @@ internal interface LibMpv : Library {
                 }
             }
             throw IllegalStateException(
-                "libmpv-2.dll was not found. The bundled DLL should ship in resources at " +
-                    "win32-x86-64/libmpv-2.dll. If you are running a custom build, ensure mpv is " +
-                    "on PATH or place libmpv-2.dll into an 'mpv' folder next to the executable.",
+                if (isMac) {
+                    "libmpv.dylib was not found. The bundled dylib should ship in resources at " +
+                        "macos-universal/libmpv.dylib. If you are running a custom build, run " +
+                        "'./gradlew :composeApp:fetchMacOSLibmpv' so the dylib is downloaded and patched."
+                } else {
+                    "libmpv-2.dll was not found. The bundled DLL should ship in resources at " +
+                        "win32-x86-64/libmpv-2.dll. If you are running a custom build, ensure mpv is " +
+                        "on PATH or place libmpv-2.dll into an 'mpv' folder next to the executable."
+                },
             )
         }
 
@@ -660,7 +710,10 @@ internal interface LibMpv : Library {
             System.setProperty("jna.library.path", combined)
         }
 
-        private fun candidateSearchDirs(): List<File> {
+        private fun candidateSearchDirs(): List<File> =
+            if (isMac) macSearchDirs() else windowsSearchDirs()
+
+        private fun windowsSearchDirs(): List<File> {
             val home = System.getProperty("user.home").orEmpty()
             val userDir = System.getProperty("user.dir").orEmpty()
             val programFiles = System.getenv("ProgramFiles") ?: "C:\\Program Files"
@@ -678,6 +731,47 @@ internal interface LibMpv : Library {
                 File("C:\\ProgramData\\chocolatey\\bin"),
             ).filter { it.isDirectory }
         }
+
+        private fun macSearchDirs(): List<File> {
+            val home = System.getProperty("user.home").orEmpty()
+            val userDir = System.getProperty("user.dir").orEmpty()
+            val workspaceBundles = listOfNotNull(
+                File(userDir).takeIf { it.path.isNotEmpty() },
+                File(userDir).parentFile,
+            ).flatMap { root ->
+                listOf(
+                    File(root, "composeApp/build/generated/libmpv/macos-universal"),
+                    File(root, "composeApp/build/processedResources/desktop/main/macos-universal"),
+                    File(root, "build/generated/libmpv/macos-universal"),
+                    File(root, "build/processedResources/desktop/main/macos-universal"),
+                )
+            }
+            return (listOfNotNull(bundledLibmpvDir()) + workspaceBundles + listOf(
+                File("/opt/homebrew/lib"),
+                File("/usr/local/lib"),
+                File("$home/Applications/mpv.app/Contents/MacOS/lib"),
+                File("/Applications/mpv.app/Contents/MacOS/lib"),
+            )).filter { it.isDirectory }
+        }
+
+        private fun bundledLibmpvDir(): File? {
+            // When packaged via Compose Desktop, dylibs may live in resources next to the JAR
+            // or extracted under the .app's bundle. Walk up from this class' code-source and
+            // probe known relative locations at each level.
+            val classUrl = LibMpv::class.java.protectionDomain?.codeSource?.location ?: return null
+            val classFile = runCatching { File(classUrl.toURI()) }.getOrNull() ?: return null
+            val base = if (classFile.isFile) classFile.parentFile else classFile
+            val relativeCandidates = listOf(
+                "macos-universal",
+                "generated/libmpv/macos-universal",
+                "processedResources/desktop/main/macos-universal",
+                "../macos-universal",
+            )
+            return generateSequence(base) { it.parentFile }
+                .take(8)
+                .flatMap { dir -> relativeCandidates.asSequence().map { File(dir, it) } }
+                .firstOrNull { it.isDirectory && File(it, "libmpv.dylib").isFile }
+        }
     }
 
     fun mpv_create(): Pointer?
@@ -691,6 +785,7 @@ internal interface LibMpv : Library {
     fun mpv_command_string(handle: Pointer, args: String): Int
     fun mpv_wait_event(handle: Pointer, timeout: Double): Pointer?
     fun mpv_error_string(error: Int): Pointer?
+    fun mpv_request_log_messages(handle: Pointer, minLevel: String): Int
 
     fun mpv_render_context_create(out: PointerByReference, mpv: Pointer, params: Pointer): Int
     fun mpv_render_context_render(ctx: Pointer, params: Pointer): Int

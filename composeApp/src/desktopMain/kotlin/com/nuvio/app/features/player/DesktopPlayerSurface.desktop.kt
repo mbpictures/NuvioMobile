@@ -61,7 +61,7 @@ internal interface DesktopPlaybackBackend {
 private fun desktopPlaybackBackend(): DesktopPlaybackBackend {
     val osName = System.getProperty("os.name").orEmpty().lowercase()
     return when {
-        osName.contains("mac") -> MacOSMpvPlayerBackend
+        osName.contains("mac") -> MacOSLibMpvPlayerBackend
         osName.contains("win") -> WindowsMpvPlayerBackend
         else -> UnsupportedDesktopPlaybackBackend(osName.ifBlank { "unknown" })
     }
