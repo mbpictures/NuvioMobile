@@ -16,7 +16,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
-PACKAGE="com.nuvio.app"
+PACKAGE="com.nuvio.media.fork"
 SERIAL=""
 CLEAR_BUFFER=false
 TAG_FILTER=""

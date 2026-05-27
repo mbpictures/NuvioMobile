@@ -211,7 +211,7 @@ val iosDistributionSourceDir = if (iosDistribution == "full") {
 } else {
     "src/iosAppStore/kotlin"
 }
-val iosFrameworkBundleId = "com.nuvio.media"
+val iosFrameworkBundleId = "com.nuvio.media.fork"
 val fullCommonSourceDir = project.file("src/fullCommonMain/kotlin")
 val generatedRuntimeConfigDir = layout.buildDirectory.dir("generated/runtime-config/kotlin")
 
@@ -498,7 +498,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.nuvio.app"
+        applicationId = "com.nuvio.media.fork"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = releaseAppVersionCode
