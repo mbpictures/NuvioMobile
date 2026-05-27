@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -35,6 +36,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -1726,6 +1728,9 @@ fun PlayerScreen(
             }
         }
 
+        val systemGestureInsets = WindowInsets.systemGestures
+        val gestureLayoutDirection = LocalLayoutDirection.current
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1747,7 +1752,11 @@ fun PlayerScreen(
                         },
                     )
                 }
-                .pointerInput(gestureController, layoutSize) {
+                .pointerInput(gestureController, layoutSize, systemGestureInsets, gestureLayoutDirection) {
+                    val edgeLeft = systemGestureInsets.getLeft(this, gestureLayoutDirection).toFloat()
+                    val edgeRight = systemGestureInsets.getRight(this, gestureLayoutDirection).toFloat()
+                    val edgeTop = systemGestureInsets.getTop(this).toFloat()
+                    val edgeBottom = systemGestureInsets.getBottom(this).toFloat()
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         if (playerControlsLockedState.value) {
@@ -1762,6 +1771,16 @@ fun PlayerScreen(
                         val controller = gestureController
                         val width = size.width.toFloat().takeIf { it > 0f } ?: return@awaitEachGesture
                         val height = size.height.toFloat().takeIf { it > 0f } ?: return@awaitEachGesture
+                        // Yield to the OS when the touch starts inside the system gesture inset
+                        // (e.g. swipe from the edge to reveal status/nav bars).
+                        if (
+                            down.position.x < edgeLeft ||
+                            down.position.x > width - edgeRight ||
+                            down.position.y < edgeTop ||
+                            down.position.y > height - edgeBottom
+                        ) {
+                            return@awaitEachGesture
+                        }
                         val region = when {
                             down.position.x < width * PlayerLeftGestureBoundary -> PlayerSideGesture.Brightness
                             down.position.x > width * PlayerRightGestureBoundary -> PlayerSideGesture.Volume
