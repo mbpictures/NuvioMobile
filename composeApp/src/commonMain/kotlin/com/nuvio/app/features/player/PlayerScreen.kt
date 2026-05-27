@@ -2290,11 +2290,15 @@ fun PlayerScreen(
                     resizeMode = resizeMode,
                     isLocked = playerControlsLocked,
                     showPlaybackControls = controlsVisible,
-                    onLockToggle = {
-                        if (playerControlsLocked) {
-                            unlockPlayerControls()
-                        } else {
-                            lockPlayerControls()
+                    onLockToggle = if (isDesktop) {
+                        null
+                    } else {
+                        {
+                            if (playerControlsLocked) {
+                                unlockPlayerControls()
+                            } else {
+                                lockPlayerControls()
+                            }
                         }
                     },
                     onBack = onBackWithProgress,
