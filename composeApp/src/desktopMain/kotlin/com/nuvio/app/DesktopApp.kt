@@ -17,6 +17,7 @@ private fun configureMacOsNativeAppearance() {
 
 fun main() {
     configureMacOsNativeAppearance()
+    System.setProperty("compose.interop.blending", "true")
     application {
         Window(
             onCloseRequest = ::exitApplication,

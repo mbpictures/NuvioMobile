@@ -6,9 +6,12 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+import java.io.File
+import java.net.URI
 import java.util.Properties
 
 abstract class GenerateRuntimeConfigsTask : DefaultTask() {
@@ -394,6 +397,84 @@ val buildDesktopMpvBridge = tasks.register<Exec>("buildDesktopMpvBridge") {
 
 tasks.matching { it.name == "run" || it.name == "desktopRun" }.configureEach {
     dependsOn(buildDesktopMpvBridge)
+}
+
+abstract class FetchWindowsLibmpvTask : DefaultTask() {
+    @get:Input
+    abstract val archiveUrl: Property<String>
+
+    @get:Input
+    abstract val extractorUrl: Property<String>
+
+    @get:OutputFile
+    abstract val archiveFile: RegularFileProperty
+
+    @get:OutputFile
+    abstract val extractorFile: RegularFileProperty
+
+    @get:OutputFile
+    abstract val dllFile: RegularFileProperty
+
+    @TaskAction
+    fun fetch() {
+        downloadIfMissing(archiveFile.get().asFile, archiveUrl.get(), minSize = 1_000_000L, label = "libmpv archive")
+        downloadIfMissing(extractorFile.get().asFile, extractorUrl.get(), minSize = 100_000L, label = "7zr extractor")
+
+        val dll = dllFile.get().asFile
+        dll.parentFile.mkdirs()
+        if (dll.exists()) dll.delete()
+
+        val outDir = dll.parentFile
+        val process = ProcessBuilder(
+            extractorFile.get().asFile.absolutePath,
+            "e",
+            archiveFile.get().asFile.absolutePath,
+            "-o${outDir.absolutePath}",
+            "-y",
+            "-r",
+            "libmpv-2.dll",
+        ).redirectErrorStream(true).start()
+        val stdout = process.inputStream.bufferedReader().readText()
+        val exit = process.waitFor()
+        if (exit != 0) {
+            throw GradleException("7zr extraction failed (exit $exit):\n$stdout")
+        }
+        if (!dll.exists()) {
+            throw GradleException("libmpv-2.dll not found after extraction.\n7zr output:\n$stdout")
+        }
+        logger.lifecycle("Extracted libmpv-2.dll (${dll.length() / 1024} KiB)")
+    }
+
+    private fun downloadIfMissing(target: File, url: String, minSize: Long, label: String) {
+        if (target.exists() && target.length() >= minSize) return
+        target.parentFile.mkdirs()
+        logger.lifecycle("Downloading $label: $url")
+        URI(url).toURL().openStream().use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        }
+    }
+}
+
+val libmpvArchiveUrl =
+    "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20260527/mpv-dev-x86_64-20260527-git-427e4bf.7z"
+val sevenZrExtractorUrl = "https://www.7-zip.org/a/7zr.exe"
+val libmpvResourceRoot = layout.buildDirectory.dir("generated/libmpv")
+
+val fetchWindowsLibmpv = tasks.register<FetchWindowsLibmpvTask>("fetchWindowsLibmpv") {
+    onlyIf { org.gradle.internal.os.OperatingSystem.current().isWindows }
+    archiveUrl.set(libmpvArchiveUrl)
+    extractorUrl.set(sevenZrExtractorUrl)
+    archiveFile.set(layout.buildDirectory.file("libmpv-cache/libmpv.7z"))
+    extractorFile.set(layout.buildDirectory.file("libmpv-cache/7zr.exe"))
+    dllFile.set(libmpvResourceRoot.map { it.file("win32-x86-64/libmpv-2.dll") })
+}
+
+kotlin {
+    sourceSets {
+        val desktopMain by getting {
+            resources.srcDir(fetchWindowsLibmpv.map { libmpvResourceRoot.get().asFile })
+        }
+    }
 }
 
 configurations.all {
