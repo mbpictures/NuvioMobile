@@ -99,16 +99,81 @@ import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
+import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.watching.application.WatchingActions
 import com.nuvio.app.features.watching.application.WatchingState
+import com.nuvio.app.isDesktop
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
+data class PlayableTarget(
+    val type: String,
+    val videoId: String,
+    val parentMetaId: String,
+    val parentMetaType: String,
+    val title: String,
+    val logo: String?,
+    val poster: String?,
+    val background: String?,
+    val seasonNumber: Int?,
+    val episodeNumber: Int?,
+    val episodeTitle: String?,
+    val episodeThumbnail: String?,
+    val pauseDescription: String?,
+    val resumePositionMs: Long?,
+)
+
 @Composable
 @OptIn(ExperimentalSharedTransitionApi::class)
 fun MetaDetailsScreen(
+    type: String,
+    id: String,
+    onBack: () -> Unit,
+    onPlay: ((type: String, videoId: String, parentMetaId: String, parentMetaType: String, title: String, logo: String?, poster: String?, background: String?, seasonNumber: Int?, episodeNumber: Int?, episodeTitle: String?, episodeThumbnail: String?, pauseDescription: String?, resumePositionMs: Long?) -> Unit)? = null,
+    onPlayManually: ((type: String, videoId: String, parentMetaId: String, parentMetaType: String, title: String, logo: String?, poster: String?, background: String?, seasonNumber: Int?, episodeNumber: Int?, episodeTitle: String?, episodeThumbnail: String?, pauseDescription: String?, resumePositionMs: Long?) -> Unit)? = null,
+    onLaunchStream: ((target: PlayableTarget, stream: StreamItem, forceExternal: Boolean, forceInternal: Boolean, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit)? = null,
+    onOpenMeta: ((MetaPreview) -> Unit)? = null,
+    onCastClick: ((MetaPerson, String?) -> Unit)? = null,
+    onCompanyClick: ((MetaCompany, String) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    modifier: Modifier = Modifier,
+) {
+    if (isDesktop) {
+        MetaDetailsScreenDesktop(
+            type = type,
+            id = id,
+            onBack = onBack,
+            onLaunchStream = onLaunchStream,
+            onOpenMeta = onOpenMeta,
+            onCastClick = onCastClick,
+            onCompanyClick = onCompanyClick,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            modifier = modifier,
+        )
+    } else {
+        MetaDetailsScreenMobile(
+            type = type,
+            id = id,
+            onBack = onBack,
+            onPlay = onPlay,
+            onPlayManually = onPlayManually,
+            onOpenMeta = onOpenMeta,
+            onCastClick = onCastClick,
+            onCompanyClick = onCompanyClick,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalSharedTransitionApi::class)
+internal fun MetaDetailsScreenMobile(
     type: String,
     id: String,
     onBack: () -> Unit,

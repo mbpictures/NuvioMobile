@@ -39,6 +39,7 @@ fun DetailActionButtons(
     saveLabel: String = stringResource(Res.string.action_save),
     isSaved: Boolean = false,
     isTablet: Boolean = false,
+    showPlayButton: Boolean = true,
     onPlayClick: () -> Unit = {},
     onPlayLongClick: (() -> Unit)? = null,
     onSaveClick: () -> Unit = {},
@@ -62,37 +63,39 @@ fun DetailActionButtons(
             Modifier.weight(1f)
         }
 
-        Surface(
-            modifier = rowButtonModifier.height(50.dp),
-            shape = playShape,
-            color = MaterialTheme.colorScheme.onBackground,
-            contentColor = MaterialTheme.colorScheme.background,
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .nuvioSecondaryClick(onPlayLongClick)
-                    .combinedClickable(
-                        onClick = onPlayClick,
-                        onLongClick = onPlayLongClick,
-                        role = Role.Button,
-                    )
-                    .height(50.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
+        if (showPlayButton) {
+            Surface(
+                modifier = rowButtonModifier.height(50.dp),
+                shape = playShape,
+                color = MaterialTheme.colorScheme.onBackground,
+                contentColor = MaterialTheme.colorScheme.background,
             ) {
-                Icon(
-                    painter = playPainter,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = playLabel,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .nuvioSecondaryClick(onPlayLongClick)
+                        .combinedClickable(
+                            onClick = onPlayClick,
+                            onLongClick = onPlayLongClick,
+                            role = Role.Button,
+                        )
+                        .height(50.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        painter = playPainter,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = playLabel,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
 
