@@ -88,6 +88,7 @@ import com.nuvio.app.core.ui.NuvioNavigationBar
 import com.nuvio.app.core.ui.NuvioContinueWatchingActionSheet
 import com.nuvio.app.core.ui.NuvioPosterActionSheet
 import com.nuvio.app.core.ui.NuvioStatusModal
+import com.nuvio.app.core.ui.BindPlatformBackNavigation
 import com.nuvio.app.core.ui.PlatformBackHandler
 import com.nuvio.app.core.ui.platformExitApp
 import com.nuvio.app.core.ui.configurePlatformImageLoader
@@ -547,6 +548,7 @@ private fun MainAppContent(
     onSwitchProfile: () -> Unit = {},
 ) {
         val navController = rememberNavController()
+        BindPlatformBackNavigation(navController)
         val appUpdaterController = rememberAppUpdaterController()
         remember {
             EpisodeReleaseNotificationsRepository.ensureLoaded()

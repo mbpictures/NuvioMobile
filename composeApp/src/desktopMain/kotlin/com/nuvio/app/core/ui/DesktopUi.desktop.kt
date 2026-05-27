@@ -2,11 +2,15 @@ package com.nuvio.app.core.ui
 
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
 import com.nuvio.app.core.storage.ProfileScopedKey
+import com.nuvio.app.desktop.DesktopBackDispatcher
 import com.nuvio.app.desktop.DesktopPreferences
 import kotlin.system.exitProcess
 import nuvio.composeapp.generated.resources.Res
@@ -26,10 +30,36 @@ internal actual val nuvioBottomNavigationExtraVerticalPadding: Dp = 6.dp
 internal actual fun nuvioBottomNavigationBarInsets(): WindowInsets = WindowInsets(0, 0, 0, 0)
 
 @Composable
+actual fun BindPlatformBackNavigation(navController: androidx.navigation.NavHostController) {
+    DisposableEffect(navController) {
+        DesktopBackDispatcher.fallback = {
+            if (!navController.popBackStack()) Unit
+        }
+        onDispose {
+            DesktopBackDispatcher.fallback = null
+        }
+    }
+}
+
+@Composable
 actual fun PlatformBackHandler(
     enabled: Boolean,
     onBack: () -> Unit,
-) = Unit
+) {
+    val enabledState by rememberUpdatedState(enabled)
+    val onBackState by rememberUpdatedState(onBack)
+    DisposableEffect(Unit) {
+        val unregister = DesktopBackDispatcher.register {
+            if (enabledState) {
+                onBackState.invoke()
+                true
+            } else {
+                false
+            }
+        }
+        onDispose { unregister() }
+    }
+}
 
 @Composable
 actual fun appIconPainter(icon: AppIconResource): Painter =

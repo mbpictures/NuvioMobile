@@ -11,11 +11,16 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.nuvio.app.desktop.DesktopBackDispatcher
 import com.nuvio.app.desktop.WindowsFullscreen
 import com.nuvio.app.features.player.LocalPlayerFullscreenController
 import com.nuvio.app.features.player.PlayerFullscreenController
 import com.nuvio.app.features.player.prewarmDesktopPlaybackBackend
+import java.awt.AWTEvent
 import java.awt.Color as AwtColor
+import java.awt.Toolkit
+import java.awt.event.AWTEventListener
+import java.awt.event.MouseEvent
 
 private val DesktopWindowBackground = AwtColor(0x0D, 0x0D, 0x0D)
 
@@ -51,6 +56,21 @@ fun main() {
 
             LaunchedEffect(Unit) {
                 prewarmDesktopPlaybackBackend()
+            }
+
+            DisposableEffect(Unit) {
+                val toolkit = Toolkit.getDefaultToolkit()
+                val mouseBackButton = 4
+                val listener = AWTEventListener { event ->
+                    if (event is MouseEvent &&
+                        event.id == MouseEvent.MOUSE_PRESSED &&
+                        event.button == mouseBackButton
+                    ) {
+                        DesktopBackDispatcher.dispatch()
+                    }
+                }
+                toolkit.addAWTEventListener(listener, AWTEvent.MOUSE_EVENT_MASK)
+                onDispose { toolkit.removeAWTEventListener(listener) }
             }
 
             val composeWindow = window
