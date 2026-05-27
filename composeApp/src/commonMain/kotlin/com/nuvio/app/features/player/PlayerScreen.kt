@@ -212,6 +212,17 @@ fun PlayerScreen(
             mild = stringResource(Res.string.parental_severity_mild),
         )
         val gestureController = rememberPlayerGestureController()
+        val fullscreenController = LocalPlayerFullscreenController.current
+        if (fullscreenController != null) {
+            DisposableEffect(fullscreenController) {
+                val wasFullscreenOnEntry = fullscreenController.isFullscreen
+                onDispose {
+                    if (fullscreenController.isFullscreen != wasFullscreenOnEntry) {
+                        fullscreenController.toggle()
+                    }
+                }
+            }
+        }
         var controlsVisible by rememberSaveable { mutableStateOf(true) }
         var playerControlsLocked by rememberSaveable { mutableStateOf(false) }
         // Active playback state (mutable to support source/episode switching)
@@ -2311,6 +2322,8 @@ fun PlayerScreen(
                     onSourcesClick = if (activeVideoId != null) { { openSourcesPanel() } } else null,
                     onEpisodesClick = if (isSeries) { { openEpisodesPanel() } } else null,
                     onSubmitIntroClick = if (isSeries && playerSettingsUiState.introSubmitEnabled && playerSettingsUiState.introDbApiKey.isNotBlank()) { { showSubmitIntroModal = true } } else null,
+                    onFullscreenClick = fullscreenController?.let { ctrl -> { ctrl.toggle() } },
+                    isFullscreen = fullscreenController?.isFullscreen == true,
                     parentalWarnings = parentalWarnings,
                     showParentalGuide = showParentalGuide,
                     onParentalGuideAnimationComplete = { showParentalGuide = false },

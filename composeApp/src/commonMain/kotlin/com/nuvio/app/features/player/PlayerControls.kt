@@ -27,6 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Replay10
@@ -88,6 +90,8 @@ internal fun PlayerControlsShell(
     onSourcesClick: (() -> Unit)? = null,
     onEpisodesClick: (() -> Unit)? = null,
     onSubmitIntroClick: (() -> Unit)? = null,
+    onFullscreenClick: (() -> Unit)? = null,
+    isFullscreen: Boolean = false,
     parentalWarnings: List<ParentalWarning> = emptyList(),
     showParentalGuide: Boolean = false,
     onParentalGuideAnimationComplete: () -> Unit = {},
@@ -148,6 +152,8 @@ internal fun PlayerControlsShell(
                 onParentalGuideAnimationComplete = onParentalGuideAnimationComplete,
                 onLockToggle = onLockToggle,
                 onVideoSettingsClick = onVideoSettingsClick,
+                onFullscreenClick = onFullscreenClick,
+                isFullscreen = isFullscreen,
                 onBack = onBack,
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -215,6 +221,8 @@ private fun PlayerHeader(
     onParentalGuideAnimationComplete: () -> Unit,
     onLockToggle: () -> Unit,
     onVideoSettingsClick: (() -> Unit)?,
+    onFullscreenClick: (() -> Unit)? = null,
+    isFullscreen: Boolean = false,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -332,6 +340,15 @@ private fun PlayerHeader(
                             buttonSize = metrics.headerIconSize + 16.dp,
                             iconSize = metrics.headerIconSize,
                             onClick = onVideoSettingsClick,
+                        )
+                    }
+                    if (onFullscreenClick != null) {
+                        PlayerHeaderIconButton(
+                            icon = if (isFullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
+                            contentDescription = if (isFullscreen) "Exit fullscreen" else "Enter fullscreen",
+                            buttonSize = metrics.headerIconSize + 16.dp,
+                            iconSize = metrics.headerIconSize,
+                            onClick = onFullscreenClick,
                         )
                     }
                     NuvioBackButton(
