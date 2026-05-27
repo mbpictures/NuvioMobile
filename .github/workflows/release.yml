@@ -301,6 +301,151 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  windows:
+    name: Windows desktop release
+    runs-on: windows-latest
+    needs: prepare
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Write runtime config to local.properties
+        uses: ./.github/actions/write-runtime-config
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          trakt-client-id: ${{ secrets.TRAKT_CLIENT_ID }}
+          trakt-client-secret: ${{ secrets.TRAKT_CLIENT_SECRET }}
+          trakt-redirect-uri: ${{ secrets.TRAKT_REDIRECT_URI }}
+          introdb-api-url: ${{ secrets.INTRODB_API_URL }}
+          imdb-ratings-api-base-url: ${{ secrets.IMDB_RATINGS_API_BASE_URL }}
+          imdb-tapframe-api-base-url: ${{ secrets.IMDB_TAPFRAME_API_BASE_URL }}
+          contributions-url: ${{ secrets.CONTRIBUTIONS_URL }}
+          donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
+          donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
+
+      - name: Build Windows installers (MSI + EXE)
+        run: |
+          ./gradlew.bat \
+            :composeApp:packageReleaseMsi \
+            :composeApp:packageReleaseExe \
+            --stacktrace
+
+      - name: Stage and rename Windows artifacts
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          for ext in msi exe; do
+            src="composeApp/build/compose/binaries/main-release/${ext}/Nuvio-${VERSION}.${ext}"
+            if [[ ! -f "$src" ]]; then
+              echo "::error::Missing Windows ${ext} artifact at $src"
+              ls -la "composeApp/build/compose/binaries/main-release/${ext}/" || true
+              exit 1
+            fi
+            dest="artifacts/Nuvio-${VERSION}-windows.${ext}"
+            cp "$src" "$dest"
+            echo "  $src -> $dest"
+          done
+          ls -la artifacts/
+
+      - name: Upload Windows installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: |
+            artifacts/*.msi
+            artifacts/*.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    name: macOS desktop release
+    runs-on: macos-15
+    needs: prepare
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Write runtime config to local.properties
+        uses: ./.github/actions/write-runtime-config
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          trakt-client-id: ${{ secrets.TRAKT_CLIENT_ID }}
+          trakt-client-secret: ${{ secrets.TRAKT_CLIENT_SECRET }}
+          trakt-redirect-uri: ${{ secrets.TRAKT_REDIRECT_URI }}
+          introdb-api-url: ${{ secrets.INTRODB_API_URL }}
+          imdb-ratings-api-base-url: ${{ secrets.IMDB_RATINGS_API_BASE_URL }}
+          imdb-tapframe-api-base-url: ${{ secrets.IMDB_TAPFRAME_API_BASE_URL }}
+          contributions-url: ${{ secrets.CONTRIBUTIONS_URL }}
+          donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
+          donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
+
+      - name: Build macOS installer (DMG)
+        run: |
+          ./gradlew \
+            :composeApp:packageReleaseDmg \
+            --stacktrace
+
+      - name: Stage and rename macOS artifact
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          src="composeApp/build/compose/binaries/main-release/dmg/Nuvio-${VERSION}.dmg"
+          if [[ ! -f "$src" ]]; then
+            echo "::error::Missing macOS dmg artifact at $src"
+            ls -la "composeApp/build/compose/binaries/main-release/dmg/" || true
+            exit 1
+          fi
+          dest="artifacts/Nuvio-${VERSION}-macos.dmg"
+          cp "$src" "$dest"
+          echo "  $src -> $dest"
+          ls -la artifacts/
+
+      - name: Upload macOS installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: artifacts/*.dmg
+          if-no-files-found: error
+          retention-days: 7
+
   ios-testflight:
     name: iOS TestFlight upload
     runs-on: macos-15
@@ -510,7 +655,7 @@ jobs:
   release:
     name: Publish GitHub release
     runs-on: ubuntu-latest
-    needs: [prepare, android, ios]
+    needs: [prepare, android, ios, windows, macos]
     timeout-minutes: 15
     steps:
       - name: Download Android artifacts
@@ -523,6 +668,18 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ios-ipa
+          path: release-assets/
+
+      - name: Download Windows installers
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installers
+          path: release-assets/
+
+      - name: Download macOS installer
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-installer
           path: release-assets/
 
       - name: List release assets
@@ -548,7 +705,7 @@ jobs:
           {
             echo "## Nuvio ${VERSION}"
             echo
-            echo "### Downloads"
+            echo "### Mobile downloads"
             echo
             echo "| Architecture | Android (Full) | Android (Play Store) | iOS |"
             echo "| --- | --- | --- | --- |"
@@ -563,11 +720,22 @@ jobs:
               "$(link "Nuvio-${VERSION}-android-full-x86_64.apk" "APK")" \
               "$(link "Nuvio-${VERSION}-android-playstore-x86_64.apk" "APK")"
             echo
+            echo "### Desktop downloads"
+            echo
+            echo "| Platform | Installer |"
+            echo "| --- | --- |"
+            printf '| Windows | %s &nbsp;/&nbsp; %s |\n' \
+              "$(link "Nuvio-${VERSION}-windows.msi" "MSI")" \
+              "$(link "Nuvio-${VERSION}-windows.exe" "EXE")"
+            printf '| macOS | %s |\n' \
+              "$(link "Nuvio-${VERSION}-macos.dmg" "DMG")"
+            echo
             echo "### Notes"
             echo
             echo "- **Android (Full)** is the sideload-distribution flavor with the full feature set. **Android (Play Store)** matches the Play Store-distribution flavor."
             echo "- The iOS .ipa is **unsigned** — install with AltStore, Sideloadly, or another sideloading tool."
-            echo "- Desktop builds (Windows / macOS / Linux) are not yet published from this workflow."
+            echo "- The Windows MSI and EXE and the macOS DMG are unsigned. Windows SmartScreen / macOS Gatekeeper may warn on first launch — bypass per OS instructions."
+            echo "- A Linux desktop build is not yet published from this workflow."
           } > release-notes.md
           echo "--- release notes ---"
           cat release-notes.md
@@ -582,4 +750,7 @@ jobs:
           files: |
             release-assets/*.apk
             release-assets/*.ipa
+            release-assets/*.msi
+            release-assets/*.exe
+            release-assets/*.dmg
           fail_on_unmatched_files: true
