@@ -222,13 +222,13 @@ fun HomeHeroSection(
                             horizontal = layout.contentHorizontalPadding,
                             vertical = layout.contentVerticalPadding,
                         ),
-                    horizontalAlignment = if (layout.isTablet) Alignment.Start else Alignment.CenterHorizontally,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(layout.contentWidthFraction)
                             .widthIn(max = layout.contentMaxWidth),
-                        contentAlignment = if (layout.isTablet) Alignment.CenterStart else Alignment.Center,
+                        contentAlignment = Alignment.Center,
                     ) {
                         visiblePages.forEach { layer ->
                             Box(
@@ -349,7 +349,7 @@ private fun HeroContentBlock(
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = if (layout.isTablet) Alignment.Start else Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (item.logo != null) {
             AsyncImage(
@@ -361,7 +361,7 @@ private fun HeroContentBlock(
                     .clickable(enabled = onItemClick != null) {
                         onItemClick?.invoke(item)
                     },
-                alignment = if (layout.isTablet) Alignment.CenterStart else Alignment.Center,
+                alignment = Alignment.Center,
                 contentScale = ContentScale.Fit,
             )
         } else {
@@ -379,7 +379,7 @@ private fun HeroContentBlock(
                 },
                 color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Black,
-                textAlign = if (layout.isTablet) TextAlign.Start else TextAlign.Center,
+                textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -388,11 +388,7 @@ private fun HeroContentBlock(
         Spacer(modifier = Modifier.height(12.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = if (layout.isTablet) {
-                Arrangement.spacedBy(8.dp, Alignment.Start)
-            } else {
-                Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-            },
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HeroMetaText(text = item.type.replaceFirstChar(Char::uppercase))
