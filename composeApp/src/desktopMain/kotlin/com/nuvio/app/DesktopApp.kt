@@ -12,6 +12,7 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.nuvio.app.desktop.DesktopBackDispatcher
+import com.nuvio.app.desktop.WindowsChrome
 import com.nuvio.app.desktop.WindowsFullscreen
 import com.nuvio.app.features.player.LocalPlayerFullscreenController
 import com.nuvio.app.features.player.PlayerFullscreenController
@@ -46,6 +47,7 @@ fun main() {
             onCloseRequest = ::exitApplication,
             state = windowState,
             title = "Nuvio",
+            undecorated = isWindows,
         ) {
             DisposableEffect(window) {
                 window.background = DesktopWindowBackground
@@ -130,7 +132,17 @@ fun main() {
             CompositionLocalProvider(
                 LocalPlayerFullscreenController provides fullscreenController,
             ) {
-                App()
+                if (isWindows) {
+                    WindowsChrome(
+                        window = composeWindow,
+                        windowState = windowState,
+                        onClose = ::exitApplication,
+                    ) {
+                        App()
+                    }
+                } else {
+                    App()
+                }
             }
         }
     }
