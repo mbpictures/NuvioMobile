@@ -165,7 +165,11 @@ fun HomeHeroSection(
             }
 
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(enabled = onItemClick != null) {
+                        onItemClick?.invoke(currentItem)
+                    },
             ) {
                 visiblePages.forEach { layer ->
                     AsyncImage(
@@ -223,13 +227,13 @@ fun HomeHeroSection(
                             horizontal = layout.contentHorizontalPadding,
                             vertical = layout.contentVerticalPadding,
                         ),
-                    horizontalAlignment = if (layout.isTablet) Alignment.Start else Alignment.CenterHorizontally,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(layout.contentWidthFraction)
                             .widthIn(max = layout.contentMaxWidth),
-                        contentAlignment = if (layout.isTablet) Alignment.CenterStart else Alignment.Center,
+                        contentAlignment = Alignment.Center,
                     ) {
                         visiblePages.forEach { layer ->
                             Box(
@@ -241,7 +245,6 @@ fun HomeHeroSection(
                                 HeroContentBlock(
                                     item = items[layer.page],
                                     layout = layout,
-                                    onItemClick = onItemClick,
                                 )
                             }
                         }
@@ -346,11 +349,10 @@ fun HomeHeroReservedSpace(
 private fun HeroContentBlock(
     item: MetaPreview,
     layout: HomeHeroLayout,
-    onItemClick: ((MetaPreview) -> Unit)?,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = if (layout.isTablet) Alignment.Start else Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (item.logo != null) {
             AsyncImage(
@@ -358,21 +360,14 @@ private fun HeroContentBlock(
                 contentDescription = item.name,
                 modifier = Modifier
                     .fillMaxWidth(layout.logoWidthFraction)
-                    .aspectRatio(2.6f)
-                    .clickable(enabled = onItemClick != null) {
-                        onItemClick?.invoke(item)
-                    },
-                alignment = if (layout.isTablet) Alignment.CenterStart else Alignment.Center,
+                    .aspectRatio(2.6f),
+                alignment = Alignment.Center,
                 contentScale = ContentScale.Fit,
             )
         } else {
             Text(
                 text = item.name,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = onItemClick != null) {
-                        onItemClick?.invoke(item)
-                    },
+                modifier = Modifier.fillMaxWidth(),
                 style = if (layout.isTablet) {
                     MaterialTheme.typography.displaySmall
                 } else {
@@ -380,7 +375,7 @@ private fun HeroContentBlock(
                 },
                 color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Black,
-                textAlign = if (layout.isTablet) TextAlign.Start else TextAlign.Center,
+                textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -389,11 +384,7 @@ private fun HeroContentBlock(
         Spacer(modifier = Modifier.height(12.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = if (layout.isTablet) {
-                Arrangement.spacedBy(8.dp, Alignment.Start)
-            } else {
-                Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-            },
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HeroMetaText(text = item.type.replaceFirstChar(Char::uppercase))
