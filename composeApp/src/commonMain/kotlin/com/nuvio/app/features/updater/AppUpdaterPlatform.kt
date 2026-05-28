@@ -5,6 +5,8 @@ expect object AppUpdaterPlatform {
 
     fun getSupportedAbis(): List<String>
 
+    fun getAssetFileExtensions(): List<String>
+
     fun getDistributionFlavor(): String
 
     fun getIgnoredTag(): String?
