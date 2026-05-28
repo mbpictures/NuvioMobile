@@ -24,6 +24,10 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -49,6 +54,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
+import com.nuvio.app.isDesktop
 import com.nuvio.app.features.home.MetaPreview
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -297,8 +303,66 @@ fun HomeHeroSection(
                         }
                     }
                 }
+
+                if (isDesktop && items.size > 1) {
+                    HeroNavButton(
+                        icon = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                        contentDescription = stringResource(Res.string.action_previous),
+                        enabled = currentPage > 0,
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = layout.contentHorizontalPadding),
+                        onClick = {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(
+                                    (pagerState.currentPage - 1).coerceAtLeast(0),
+                                )
+                            }
+                        },
+                    )
+                    HeroNavButton(
+                        icon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = stringResource(Res.string.action_next),
+                        enabled = currentPage < items.size - 1,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = layout.contentHorizontalPadding),
+                        onClick = {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(
+                                    (pagerState.currentPage + 1).coerceAtMost(items.size - 1),
+                                )
+                            }
+                        },
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun HeroNavButton(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.4f))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = if (enabled) 1f else 0.3f),
+            modifier = Modifier.size(28.dp),
+        )
     }
 }
 
