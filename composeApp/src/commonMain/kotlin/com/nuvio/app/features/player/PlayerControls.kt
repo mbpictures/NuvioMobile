@@ -234,9 +234,24 @@ private fun PlayerHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
-            Box(
+            Row(
                 modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
             ) {
+                if (showActions) {
+                    NuvioBackButton(
+                        onClick = onBack,
+                        containerColor = Color.Black.copy(alpha = 0.35f),
+                        contentColor = Color.White,
+                        buttonSize = metrics.headerIconSize + 16.dp,
+                        iconSize = metrics.headerIconSize,
+                        contentDescription = stringResource(Res.string.compose_player_close),
+                    )
+                }
+                Box(
+                    modifier = Modifier.weight(1f),
+                ) {
                 Column(
                     modifier = Modifier.graphicsLayer { alpha = metadataAlpha },
                     verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -302,6 +317,7 @@ private fun PlayerHeader(
                     onAnimationComplete = onParentalGuideAnimationComplete,
                     contentPadding = PaddingValues(0.dp),
                 )
+                }
             }
 
             if (showActions) {
@@ -347,14 +363,6 @@ private fun PlayerHeader(
                             onClick = onVideoSettingsClick,
                         )
                     }
-                    NuvioBackButton(
-                        onClick = onBack,
-                        containerColor = Color.Black.copy(alpha = 0.35f),
-                        contentColor = Color.White,
-                        buttonSize = metrics.headerIconSize + 16.dp,
-                        iconSize = metrics.headerIconSize,
-                        contentDescription = stringResource(Res.string.compose_player_close),
-                    )
                 }
             }
         }
