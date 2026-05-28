@@ -84,22 +84,22 @@ For comprehensive legal information, including our full disclaimer, third-party 
 
 ## Star History
 
-<a href="https://www.star-history.com/#NuvioMedia/NuvioMobile&type=date&legend=top-left">
+<a href="https://www.star-history.com/#mbpictures/NuvioMobile&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=NuvioMedia/NuvioMobile&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=NuvioMedia/NuvioMobile&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=NuvioMedia/NuvioMobile&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=mbpictures/NuvioMobile&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=mbpictures/NuvioMobile&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=mbpictures/NuvioMobile&type=date&legend=top-left" />
  </picture>
 </a>
 
 <!-- MARKDOWN LINKS & IMAGES -->
-[contributors-shield]: https://img.shields.io/github/contributors/NuvioMedia/NuvioMobile.svg?style=for-the-badge
-[contributors-url]: https://github.com/NuvioMedia/NuvioMobile/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/NuvioMedia/NuvioMobile.svg?style=for-the-badge
-[forks-url]: https://github.com/NuvioMedia/NuvioMobile/network/members
-[stars-shield]: https://img.shields.io/github/stars/NuvioMedia/NuvioMobile.svg?style=for-the-badge
-[stars-url]: https://github.com/NuvioMedia/NuvioMobile/stargazers
-[issues-shield]: https://img.shields.io/github/issues/NuvioMedia/NuvioMobile.svg?style=for-the-badge
-[issues-url]: https://github.com/NuvioMedia/NuvioMobile/issues
-[license-shield]: https://img.shields.io/github/license/NuvioMedia/NuvioMobile.svg?style=for-the-badge
-[license-url]: https://github.com/NuvioMedia/NuvioMobile/blob/main/LICENSE
+[contributors-shield]: https://img.shields.io/github/contributors/mbpictures/NuvioMobile.svg?style=for-the-badge
+[contributors-url]: https://github.com/mbpictures/NuvioMobile/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/mbpictures/NuvioMobile.svg?style=for-the-badge
+[forks-url]: https://github.com/mbpictures/NuvioMobile/network/members
+[stars-shield]: https://img.shields.io/github/stars/mbpictures/NuvioMobile.svg?style=for-the-badge
+[stars-url]: https://github.com/mbpictures/NuvioMobile/stargazers
+[issues-shield]: https://img.shields.io/github/issues/mbpictures/NuvioMobile.svg?style=for-the-badge
+[issues-url]: https://github.com/mbpictures/NuvioMobile/issues
+[license-shield]: https://img.shields.io/github/license/mbpictures/NuvioMobile.svg?style=for-the-badge
+[license-url]: https://github.com/mbpictures/NuvioMobile/blob/main/LICENSE
