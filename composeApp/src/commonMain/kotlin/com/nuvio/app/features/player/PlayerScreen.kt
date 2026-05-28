@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -35,6 +36,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,6 +49,7 @@ import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.AddonResource
 import com.nuvio.app.features.addons.ManagedAddon
 import com.nuvio.app.features.addons.enabledAddons
+import com.nuvio.app.features.addons.httpGetTextWithHeaders
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.details.MetaVideo
@@ -66,6 +69,7 @@ import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamLinkCacheRepository
 import com.nuvio.app.features.streams.StreamsUiState
 import com.nuvio.app.features.tmdb.TmdbService
+import com.nuvio.app.features.trakt.TraktScrobbleItem
 import com.nuvio.app.features.trakt.TraktScrobbleRepository
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watchprogress.WatchProgressClock
@@ -75,6 +79,7 @@ import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import com.nuvio.app.isIos
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -92,6 +97,7 @@ private const val PlayerLockedOverlayDurationMs = 2_000L
 private const val PlayerLeftGestureBoundary = 0.4f
 private const val PlayerRightGestureBoundary = 0.6f
 private const val PlayerVerticalGestureSensitivity = 1f
+private const val PlayerSeekProgressSyncDebounceMs = 700L
 /** Hard ceiling for next-episode stream search to prevent hanging forever. */
 private const val NEXT_EPISODE_HARD_TIMEOUT_MS = 120_000L
 private val PlayerSliderOverlayGap = 12.dp
@@ -246,6 +252,7 @@ fun PlayerScreen(
         var lockedOverlayVisible by remember { mutableStateOf(false) }
         var gestureMessageJob by remember { mutableStateOf<Job?>(null) }
         var accumulatedSeekResetJob by remember { mutableStateOf<Job?>(null) }
+        var seekProgressSyncJob by remember { mutableStateOf<Job?>(null) }
         var accumulatedSeekState by remember { mutableStateOf<PlayerAccumulatedSeekState?>(null) }
         var initialLoadCompleted by remember(activeSourceUrl) { mutableStateOf(false) }
         var speedBoostRestoreSpeed by remember(activeSourceUrl) { mutableStateOf<Float?>(null) }
@@ -265,11 +272,29 @@ fun PlayerScreen(
             activeSeasonNumber,
             activeEpisodeNumber,
         ) { mutableStateOf(false) }
+        var scrobbleStartRequestGeneration by remember(
+            activeSourceUrl,
+            activeVideoId,
+            activeSeasonNumber,
+            activeEpisodeNumber,
+        ) { mutableStateOf(0L) }
+        var pendingScrobbleStartAfterSeek by remember(
+            activeSourceUrl,
+            activeVideoId,
+            activeSeasonNumber,
+            activeEpisodeNumber,
+        ) { mutableStateOf(false) }
         var hasSentCompletionScrobbleForCurrentItem by remember(
             activeVideoId,
             activeSeasonNumber,
             activeEpisodeNumber,
         ) { mutableStateOf(false) }
+        var currentTraktScrobbleItem by remember(
+            activeSourceUrl,
+            activeVideoId,
+            activeSeasonNumber,
+            activeEpisodeNumber,
+        ) { mutableStateOf<TraktScrobbleItem?>(null) }
         val backdropArtwork = background ?: poster
         val displayedPositionMs = scrubbingPositionMs ?: playbackSnapshot.positionMs
         val isEpisode = activeSeasonNumber != null && activeEpisodeNumber != null
@@ -413,6 +438,8 @@ fun PlayerScreen(
         fun emitTraktScrobbleStart() {
             if (hasRequestedScrobbleStartForCurrentItem) return
             hasRequestedScrobbleStartForCurrentItem = true
+            val requestGeneration = scrobbleStartRequestGeneration + 1L
+            scrobbleStartRequestGeneration = requestGeneration
 
             scope.launch {
                 val item = currentTraktScrobbleItem()
@@ -420,6 +447,10 @@ fun PlayerScreen(
                     hasRequestedScrobbleStartForCurrentItem = false
                     return@launch
                 }
+                if (requestGeneration != scrobbleStartRequestGeneration || !hasRequestedScrobbleStartForCurrentItem) {
+                    return@launch
+                }
+                currentTraktScrobbleItem = item
                 TraktScrobbleRepository.scrobbleStart(
                     item = item,
                     progressPercent = currentPlaybackProgressPercent(),
@@ -432,14 +463,17 @@ fun PlayerScreen(
             if (!hasRequestedScrobbleStartForCurrentItem && (provided ?: 0f) < 80f) return
 
             val percent = provided ?: currentPlaybackProgressPercent()
-            scope.launch {
-                val item = currentTraktScrobbleItem() ?: return@launch
+            val itemSnapshot = currentTraktScrobbleItem
+            scope.launch(NonCancellable) {
+                val item = itemSnapshot ?: currentTraktScrobbleItem() ?: return@launch
                 TraktScrobbleRepository.scrobbleStop(
                     item = item,
                     progressPercent = percent,
                 )
             }
+            currentTraktScrobbleItem = null
             hasRequestedScrobbleStartForCurrentItem = false
+            scrobbleStartRequestGeneration += 1L
         }
 
         fun emitStopScrobbleForCurrentProgress() {
@@ -482,6 +516,30 @@ fun PlayerScreen(
             )
         }
 
+        fun scheduleProgressSyncAfterSeek() {
+            val shouldRestartScrobbleAfterSeek = shouldPlay || playbackSnapshot.isPlaying
+            seekProgressSyncJob?.cancel()
+            seekProgressSyncJob = scope.launch {
+                delay(PlayerSeekProgressSyncDebounceMs)
+                WatchProgressRepository.upsertPlaybackProgress(
+                    session = playbackSession,
+                    snapshot = playbackSnapshot,
+                )
+
+                val progressPercent = currentPlaybackProgressPercent()
+                if (progressPercent >= 1f && progressPercent < 80f) {
+                    emitTraktScrobbleStop(progressPercent)
+                    val shouldRestartScrobbleNow = shouldRestartScrobbleAfterSeek && shouldPlay
+                    if (shouldRestartScrobbleNow && playbackSnapshot.isPlaying) {
+                        pendingScrobbleStartAfterSeek = false
+                        emitTraktScrobbleStart()
+                    } else if (shouldRestartScrobbleNow) {
+                        pendingScrobbleStartAfterSeek = true
+                    }
+                }
+            }
+        }
+
         val onBackWithProgress = remember(onBack, playbackSession, playbackSnapshot) {
             {
                 flushWatchProgress()
@@ -520,6 +578,146 @@ fun PlayerScreen(
         var autoFetchedAddonSubtitlesForKey by rememberSaveable(activeSourceUrl, activeVideoId) {
             mutableStateOf<String?>(null)
         }
+        var trackPreferenceRestoreApplied by rememberSaveable(activeSourceUrl, parentMetaId) {
+            mutableStateOf(false)
+        }
+        var subtitleDelayMs by rememberSaveable(playbackSession.videoId) {
+            mutableStateOf(
+                PlayerTrackPreferenceStorage.loadSubtitleDelayMs(playbackSession.videoId)
+                    ?: 0
+            )
+        }
+        var subtitleAutoSyncState by remember(playbackSession.videoId, selectedAddonSubtitleId) {
+            mutableStateOf(SubtitleAutoSyncUiState())
+        }
+        val visibleAddonSubtitles = remember(
+            addonSubtitles,
+            playerSettingsUiState.preferredSubtitleLanguage,
+            playerSettingsUiState.secondaryPreferredSubtitleLanguage,
+            subtitleStyle.showOnlyPreferredLanguages,
+            playerSettingsUiState.addonSubtitleStartupMode,
+            selectedAddonSubtitleId,
+        ) {
+            filterAddonSubtitlesForSettings(
+                subtitles = addonSubtitles,
+                settings = playerSettingsUiState,
+                selectedAddonSubtitleId = selectedAddonSubtitleId,
+            )
+        }
+        val selectedAddonSubtitle = remember(addonSubtitles, selectedAddonSubtitleId) {
+            addonSubtitles.firstOrNull { subtitle ->
+                subtitle.id == selectedAddonSubtitleId || subtitle.url == selectedAddonSubtitleId
+            }
+        }
+
+        fun updateTrackPreference(update: (PersistedPlayerTrackPreference) -> PersistedPlayerTrackPreference) {
+            if (parentMetaId.isBlank()) return
+            val current = PlayerTrackPreferenceStorage.load(parentMetaId) ?: PersistedPlayerTrackPreference()
+            PlayerTrackPreferenceStorage.save(parentMetaId, update(current))
+        }
+
+        fun persistAudioPreference(track: AudioTrack?) {
+            updateTrackPreference { current ->
+                current.copy(
+                    audioLanguage = track?.language,
+                    audioName = track?.label,
+                    audioTrackId = track?.id,
+                )
+            }
+        }
+
+        fun persistInternalSubtitlePreference(track: SubtitleTrack?) {
+            updateTrackPreference { current ->
+                current.copy(
+                    subtitleType = if (track == null) {
+                        PersistedSubtitleSelectionType.DISABLED
+                    } else {
+                        PersistedSubtitleSelectionType.INTERNAL
+                    },
+                    subtitleLanguage = track?.language,
+                    subtitleName = track?.label,
+                    subtitleTrackId = track?.id,
+                    addonSubtitleId = null,
+                    addonSubtitleUrl = null,
+                    addonSubtitleAddonName = null,
+                )
+            }
+        }
+
+        fun persistAddonSubtitlePreference(subtitle: AddonSubtitle) {
+            updateTrackPreference { current ->
+                current.copy(
+                    subtitleType = PersistedSubtitleSelectionType.ADDON,
+                    subtitleLanguage = subtitle.language,
+                    subtitleName = subtitle.display,
+                    subtitleTrackId = null,
+                    addonSubtitleId = subtitle.id,
+                    addonSubtitleUrl = subtitle.url,
+                    addonSubtitleAddonName = subtitle.addonName,
+                )
+            }
+        }
+
+        fun restorePersistedTrackPreferenceIfNeeded() {
+            if (trackPreferenceRestoreApplied) return
+            val preference = PlayerTrackPreferenceStorage.load(parentMetaId)
+            if (preference == null) {
+                trackPreferenceRestoreApplied = true
+                return
+            }
+
+            if (
+                audioTracks.isNotEmpty() &&
+                (!preference.audioTrackId.isNullOrBlank() ||
+                    !preference.audioLanguage.isNullOrBlank() ||
+                    !preference.audioName.isNullOrBlank())
+            ) {
+                val restoredAudioIndex = findPersistedAudioTrackIndex(audioTracks, preference)
+                if (restoredAudioIndex >= 0 && restoredAudioIndex != selectedAudioIndex) {
+                    playerController?.selectAudioTrack(restoredAudioIndex)
+                    selectedAudioIndex = restoredAudioIndex
+                }
+                preferredAudioSelectionApplied = true
+            }
+
+            when (preference.subtitleType) {
+                PersistedSubtitleSelectionType.DISABLED -> {
+                    playerController?.selectSubtitleTrack(-1)
+                    selectedSubtitleIndex = -1
+                    selectedAddonSubtitleId = null
+                    useCustomSubtitles = false
+                    preferredSubtitleSelectionApplied = true
+                }
+                PersistedSubtitleSelectionType.INTERNAL -> {
+                    if (subtitleTracks.isNotEmpty()) {
+                        val restoredSubtitleIndex = findPersistedSubtitleTrackIndex(subtitleTracks, preference)
+                        if (restoredSubtitleIndex >= 0) {
+                            if (useCustomSubtitles) {
+                                playerController?.clearExternalSubtitleAndSelect(restoredSubtitleIndex)
+                            } else {
+                                playerController?.selectSubtitleTrack(restoredSubtitleIndex)
+                            }
+                            selectedSubtitleIndex = restoredSubtitleIndex
+                            selectedAddonSubtitleId = null
+                            useCustomSubtitles = false
+                            preferredSubtitleSelectionApplied = true
+                        }
+                    }
+                }
+                PersistedSubtitleSelectionType.ADDON -> {
+                    val url = preference.addonSubtitleUrl?.takeIf { it.isNotBlank() }
+                    if (url != null) {
+                        selectedAddonSubtitleId = preference.addonSubtitleId ?: url
+                        selectedSubtitleIndex = -1
+                        useCustomSubtitles = true
+                        playerController?.setSubtitleUri(url)
+                        preferredSubtitleSelectionApplied = true
+                    }
+                }
+            }
+
+            trackPreferenceRestoreApplied = true
+        }
 
         fun refreshTracks() {
             val ctrl = playerController ?: return
@@ -529,6 +727,8 @@ fun PlayerScreen(
             if (selectedAudio != null) selectedAudioIndex = selectedAudio.index
             val selectedSub = subtitleTracks.firstOrNull { it.isSelected }
             if (selectedSub != null && !useCustomSubtitles) selectedSubtitleIndex = selectedSub.index
+
+            restorePersistedTrackPreferenceIfNeeded()
 
             if (!preferredAudioSelectionApplied) {
                 val preferredAudioTargets = resolvePreferredAudioLanguageTargets(
@@ -554,7 +754,11 @@ fun PlayerScreen(
 
             if (!preferredSubtitleSelectionApplied) {
                 val preferredSubtitleTargets = resolvePreferredSubtitleLanguageTargets(
-                    preferredSubtitleLanguage = playerSettingsUiState.preferredSubtitleLanguage,
+                    preferredSubtitleLanguage = if (subtitleStyle.useForcedSubtitles) {
+                        SubtitleLanguageOption.FORCED
+                    } else {
+                        playerSettingsUiState.preferredSubtitleLanguage
+                    },
                     secondaryPreferredSubtitleLanguage = playerSettingsUiState.secondaryPreferredSubtitleLanguage,
                     deviceLanguages = DeviceLanguagePreferences.preferredLanguageCodes(),
                 )
@@ -579,7 +783,8 @@ fun PlayerScreen(
                         useCustomSubtitles = false
                     } else if (
                         preferredSubtitleIndex < 0 &&
-                        normalizeLanguageCode(playerSettingsUiState.preferredSubtitleLanguage) == SubtitleLanguageOption.FORCED
+                        (subtitleStyle.useForcedSubtitles ||
+                            normalizeLanguageCode(playerSettingsUiState.preferredSubtitleLanguage) == SubtitleLanguageOption.FORCED)
                     ) {
                         if (selectedSubtitleIndex != -1 || subtitleTracks.any { it.isSelected }) {
                             playerController?.selectSubtitleTrack(-1)
@@ -729,6 +934,7 @@ fun PlayerScreen(
 
         fun seekBy(offsetMs: Long) {
             playerController?.seekBy(offsetMs)
+            scheduleProgressSyncAfterSeek()
             controlsVisible = true
             when {
                 offsetMs > 0L -> showSeekFeedback(PlayerSeekDirection.Forward, offsetMs)
@@ -761,6 +967,7 @@ fun PlayerScreen(
                 }
             }
             playerController?.seekTo(targetPositionMs)
+            scheduleProgressSyncAfterSeek()
             showSeekFeedback(direction, nextState.amountMs)
 
             accumulatedSeekResetJob?.cancel()
@@ -863,6 +1070,7 @@ fun PlayerScreen(
         val currentDurationMsState = rememberUpdatedState(playbackSnapshot.durationMs)
         val commitHorizontalSeekState = rememberUpdatedState { targetPositionMs: Long ->
             playerController?.seekTo(targetPositionMs)
+            scheduleProgressSyncAfterSeek()
         }
 
         fun resolveDebridForPlayer(
@@ -1396,6 +1604,59 @@ fun PlayerScreen(
             SubtitleRepository.fetchAddonSubtitles(type, videoId)
         }
 
+        fun setSubtitleDelay(delayMs: Int) {
+            val clamped = delayMs.coerceIn(SUBTITLE_DELAY_MIN_MS, SUBTITLE_DELAY_MAX_MS)
+            subtitleDelayMs = clamped
+            PlayerTrackPreferenceStorage.saveSubtitleDelayMs(playbackSession.videoId, clamped)
+            playerController?.setSubtitleDelayMs(clamped)
+        }
+
+        fun loadSubtitleAutoSyncCues(force: Boolean = false) {
+            val subtitle = selectedAddonSubtitle ?: return
+            if (!force && subtitleAutoSyncState.cues.isNotEmpty()) return
+            subtitleAutoSyncState = subtitleAutoSyncState.copy(isLoading = true, errorMessage = null)
+            scope.launch {
+                val result = runCatching {
+                    val body = httpGetTextWithHeaders(
+                        url = subtitle.url,
+                        headers = sanitizePlaybackHeaders(activeSourceHeaders),
+                    )
+                    PlayerSubtitleCueParser.parse(body, subtitle.url)
+                }
+                result.fold(
+                    onSuccess = { cues ->
+                        subtitleAutoSyncState = subtitleAutoSyncState.copy(
+                            cues = cues,
+                            isLoading = false,
+                            errorMessage = if (cues.isEmpty()) "No subtitle lines found" else null,
+                        )
+                    },
+                    onFailure = { error ->
+                        subtitleAutoSyncState = subtitleAutoSyncState.copy(
+                            isLoading = false,
+                            errorMessage = error.message ?: "Unable to load subtitle lines",
+                        )
+                    },
+                )
+            }
+        }
+
+        fun captureSubtitleAutoSyncTime() {
+            subtitleAutoSyncState = subtitleAutoSyncState.copy(
+                capturedPositionMs = playbackSnapshot.positionMs.coerceAtLeast(0L),
+                errorMessage = null,
+            )
+            loadSubtitleAutoSyncCues()
+        }
+
+        fun applySubtitleAutoSyncCue(cue: SubtitleSyncCue) {
+            val capturedPositionMs = subtitleAutoSyncState.capturedPositionMs ?: return
+            val newDelayMs = (capturedPositionMs - cue.startTimeMs - SUBTITLE_AUTO_SYNC_REACTION_COMPENSATION_MS)
+                .toInt()
+                .coerceIn(SUBTITLE_DELAY_MIN_MS, SUBTITLE_DELAY_MAX_MS)
+            setSubtitleDelay(newDelayMs)
+        }
+
         LaunchedEffect(activeSourceUrl, activeSourceAudioUrl, activeSourceHeaders, activeSourceResponseHeaders) {
             errorMessage = null
             playerController = null
@@ -1409,6 +1670,9 @@ fun PlayerScreen(
             initialLoadCompleted = false
             lastProgressPersistEpochMs = 0L
             previousIsPlaying = false
+            pendingScrobbleStartAfterSeek = false
+            seekProgressSyncJob?.cancel()
+            seekProgressSyncJob = null
             accumulatedSeekResetJob?.cancel()
             accumulatedSeekResetJob = null
             accumulatedSeekState = null
@@ -1423,12 +1687,28 @@ fun PlayerScreen(
             WatchProgressRepository.ensureLoaded()
         }
 
+        LaunchedEffect(playbackSession.videoId) {
+            subtitleDelayMs = PlayerTrackPreferenceStorage.loadSubtitleDelayMs(playbackSession.videoId) ?: 0
+            subtitleAutoSyncState = SubtitleAutoSyncUiState()
+        }
+
+        LaunchedEffect(playerController, subtitleDelayMs) {
+            playerController?.setSubtitleDelayMs(subtitleDelayMs)
+        }
+
+        LaunchedEffect(selectedAddonSubtitleId, useCustomSubtitles, activeSourceUrl) {
+            subtitleAutoSyncState = SubtitleAutoSyncUiState()
+        }
+
         LaunchedEffect(playerController, subtitleStyle) {
             playerController?.applySubtitleStyle(subtitleStyle)
         }
 
-        LaunchedEffect(activeSourceUrl, addonSubtitleFetchKey) {
+        LaunchedEffect(activeSourceUrl, addonSubtitleFetchKey, playerSettingsUiState.addonSubtitleStartupMode) {
             val fetchKey = addonSubtitleFetchKey ?: return@LaunchedEffect
+            if (playerSettingsUiState.addonSubtitleStartupMode == AddonSubtitleStartupMode.FAST_STARTUP) {
+                return@LaunchedEffect
+            }
             if (autoFetchedAddonSubtitlesForKey == fetchKey) return@LaunchedEffect
             autoFetchedAddonSubtitlesForKey = fetchKey
             fetchAddonSubtitlesForActiveItem()
@@ -1548,14 +1828,19 @@ fun PlayerScreen(
             if (playbackSnapshot.isEnded) {
                 flushWatchProgress()
                 previousIsPlaying = false
+                pendingScrobbleStartAfterSeek = false
                 return@LaunchedEffect
             }
 
             if (previousIsPlaying && !playbackSnapshot.isPlaying && !playbackSnapshot.isLoading) {
+                pendingScrobbleStartAfterSeek = false
                 flushWatchProgress()
             }
 
-            if (!previousIsPlaying && playbackSnapshot.isPlaying) {
+            if (playbackSnapshot.isPlaying && pendingScrobbleStartAfterSeek) {
+                pendingScrobbleStartAfterSeek = false
+                emitTraktScrobbleStart()
+            } else if (!previousIsPlaying && playbackSnapshot.isPlaying) {
                 emitTraktScrobbleStart()
             }
 
@@ -1727,6 +2012,9 @@ fun PlayerScreen(
             }
         }
 
+        val systemGestureInsets = WindowInsets.systemGestures
+        val gestureLayoutDirection = LocalLayoutDirection.current
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1748,7 +2036,11 @@ fun PlayerScreen(
                         },
                     )
                 }
-                .pointerInput(gestureController, layoutSize) {
+                .pointerInput(gestureController, layoutSize, systemGestureInsets, gestureLayoutDirection) {
+                    val edgeLeft = systemGestureInsets.getLeft(this, gestureLayoutDirection).toFloat()
+                    val edgeRight = systemGestureInsets.getRight(this, gestureLayoutDirection).toFloat()
+                    val edgeTop = systemGestureInsets.getTop(this).toFloat()
+                    val edgeBottom = systemGestureInsets.getBottom(this).toFloat()
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         if (playerControlsLockedState.value) {
@@ -1763,6 +2055,16 @@ fun PlayerScreen(
                         val controller = gestureController
                         val width = size.width.toFloat().takeIf { it > 0f } ?: return@awaitEachGesture
                         val height = size.height.toFloat().takeIf { it > 0f } ?: return@awaitEachGesture
+                        // Yield to the OS when the touch starts inside the system gesture inset
+                        // (e.g. swipe from the edge to reveal status/nav bars).
+                        if (
+                            down.position.x < edgeLeft ||
+                            down.position.x > width - edgeRight ||
+                            down.position.y < edgeTop ||
+                            down.position.y > height - edgeBottom
+                        ) {
+                            return@awaitEachGesture
+                        }
                         val region = when {
                             down.position.x < width * PlayerLeftGestureBoundary -> PlayerSideGesture.Brightness
                             down.position.x > width * PlayerRightGestureBoundary -> PlayerSideGesture.Volume
@@ -2003,6 +2305,7 @@ fun PlayerScreen(
                         isScrubbingTimeline = false
                         scrubbingPositionMs = null
                         playerController?.seekTo(positionMs)
+                        scheduleProgressSyncAfterSeek()
                     },
                     horizontalSafePadding = horizontalSafePadding,
                     modifier = Modifier.fillMaxSize(),
@@ -2069,6 +2372,7 @@ fun PlayerScreen(
                     onSkip = {
                         val interval = activeSkipInterval ?: return@SkipIntroButton
                         playerController?.seekTo((interval.endTime * 1000).toLong())
+                        scheduleProgressSyncAfterSeek()
                         skipIntervalDismissed = true
                     },
                     onDismiss = { skipIntervalDismissed = true },
@@ -2116,6 +2420,7 @@ fun PlayerScreen(
                 selectedIndex = selectedAudioIndex,
                 onTrackSelected = { index ->
                     selectedAudioIndex = index
+                    persistAudioPreference(audioTracks.firstOrNull { it.index == index })
                     playerController?.selectAudioTrack(index)
                     scope.launch {
                         delay(200)
@@ -2130,16 +2435,20 @@ fun PlayerScreen(
                 activeTab = activeSubtitleTab,
                 subtitleTracks = subtitleTracks,
                 selectedSubtitleIndex = selectedSubtitleIndex,
-                addonSubtitles = addonSubtitles,
+                addonSubtitles = visibleAddonSubtitles,
                 selectedAddonSubtitleId = selectedAddonSubtitleId,
                 isLoadingAddonSubtitles = isLoadingAddonSubtitles,
                 subtitleStyle = subtitleStyle,
+                subtitleDelayMs = subtitleDelayMs,
+                selectedAddonSubtitle = selectedAddonSubtitle,
+                subtitleAutoSyncState = subtitleAutoSyncState,
                 onTabSelected = { activeSubtitleTab = it },
                 onBuiltInTrackSelected = { index ->
                     val wasCustom = useCustomSubtitles
                     selectedSubtitleIndex = index
                     selectedAddonSubtitleId = null
                     useCustomSubtitles = false
+                    persistInternalSubtitlePreference(subtitleTracks.firstOrNull { it.index == index })
                     if (wasCustom) {
                         playerController?.clearExternalSubtitleAndSelect(index)
                     } else {
@@ -2150,10 +2459,16 @@ fun PlayerScreen(
                     selectedAddonSubtitleId = addon.id
                     selectedSubtitleIndex = -1
                     useCustomSubtitles = true
+                    persistAddonSubtitlePreference(addon)
                     playerController?.setSubtitleUri(addon.url)
                 },
                 onFetchAddonSubtitles = ::fetchAddonSubtitlesForActiveItem,
                 onStyleChanged = PlayerSettingsRepository::setSubtitleStyle,
+                onSubtitleDelayChanged = ::setSubtitleDelay,
+                onSubtitleDelayReset = { setSubtitleDelay(0) },
+                onAutoSyncCapture = ::captureSubtitleAutoSyncTime,
+                onAutoSyncCueSelected = ::applySubtitleAutoSyncCue,
+                onAutoSyncReload = { loadSubtitleAutoSyncCues(force = true) },
                 onDismiss = { showSubtitleModal = false },
             )
 
@@ -2375,5 +2690,79 @@ private fun findPreferredSubtitleTrackIndex(
         if (matchIndex >= 0) return matchIndex
     }
 
+    return -1
+}
+
+private fun filterAddonSubtitlesForSettings(
+    subtitles: List<AddonSubtitle>,
+    settings: PlayerSettingsUiState,
+    selectedAddonSubtitleId: String?,
+): List<AddonSubtitle> {
+    val shouldFilter = settings.subtitleStyle.showOnlyPreferredLanguages ||
+        settings.addonSubtitleStartupMode == AddonSubtitleStartupMode.PREFERRED_ONLY
+    if (!shouldFilter) return subtitles
+
+    val targets = preferredSubtitleTargetsForSettings(settings)
+    if (targets.isEmpty()) {
+        return subtitles.filter { subtitle ->
+            subtitle.id == selectedAddonSubtitleId || subtitle.url == selectedAddonSubtitleId
+        }
+    }
+
+    val filtered = subtitles.filter { subtitle ->
+        subtitle.id == selectedAddonSubtitleId ||
+            subtitle.url == selectedAddonSubtitleId ||
+            targets.any { target ->
+                languageMatchesPreference(
+                    trackLanguage = subtitle.language,
+                    targetLanguage = target,
+                )
+            }
+    }
+    return filtered
+}
+
+private fun preferredSubtitleTargetsForSettings(settings: PlayerSettingsUiState): List<String> {
+    val preferredLanguage = if (settings.subtitleStyle.useForcedSubtitles) {
+        SubtitleLanguageOption.FORCED
+    } else {
+        settings.preferredSubtitleLanguage
+    }
+    return resolvePreferredSubtitleLanguageTargets(
+        preferredSubtitleLanguage = preferredLanguage,
+        secondaryPreferredSubtitleLanguage = settings.secondaryPreferredSubtitleLanguage,
+        deviceLanguages = DeviceLanguagePreferences.preferredLanguageCodes(),
+    ).filterNot { it == SubtitleLanguageOption.FORCED }
+}
+
+private fun findPersistedAudioTrackIndex(
+    tracks: List<AudioTrack>,
+    preference: PersistedPlayerTrackPreference,
+): Int {
+    preference.audioTrackId?.takeIf { it.isNotBlank() }?.let { trackId ->
+        tracks.firstOrNull { it.id == trackId }?.let { return it.index }
+    }
+    preference.audioLanguage?.takeIf { it.isNotBlank() }?.let { language ->
+        tracks.firstOrNull { languageMatchesPreference(it.language, language) }?.let { return it.index }
+    }
+    preference.audioName?.takeIf { it.isNotBlank() }?.let { name ->
+        tracks.firstOrNull { it.label.equals(name, ignoreCase = true) }?.let { return it.index }
+    }
+    return -1
+}
+
+private fun findPersistedSubtitleTrackIndex(
+    tracks: List<SubtitleTrack>,
+    preference: PersistedPlayerTrackPreference,
+): Int {
+    preference.subtitleTrackId?.takeIf { it.isNotBlank() }?.let { trackId ->
+        tracks.firstOrNull { it.id == trackId }?.let { return it.index }
+    }
+    preference.subtitleLanguage?.takeIf { it.isNotBlank() }?.let { language ->
+        tracks.firstOrNull { languageMatchesPreference(it.language, language) }?.let { return it.index }
+    }
+    preference.subtitleName?.takeIf { it.isNotBlank() }?.let { name ->
+        tracks.firstOrNull { it.label.equals(name, ignoreCase = true) }?.let { return it.index }
+    }
     return -1
 }

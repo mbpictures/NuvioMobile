@@ -18,6 +18,10 @@
 
 </div>
 
+> **Unofficial Fork Notice**
+>
+> This is an unofficial fork of [NuvioMedia/NuvioMobile](https://github.com/NuvioMedia/NuvioMobile), maintained independently from the upstream project.
+
 ## About
 
 Nuvio is the current Kotlin Multiplatform rewrite of the original React Native app. It delivers a shared Compose UI for Android and iOS while keeping the playback-focused experience, collection tools, watch progress flows, downloads, and Stremio addon ecosystem integration that shaped the earlier app.
