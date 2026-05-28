@@ -513,6 +513,11 @@ jobs:
     needs: [prepare, android, ios]
     timeout-minutes: 15
     steps:
+      - name: Checkout (full history for changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download Android artifacts
         uses: actions/download-artifact@v4
         with:
@@ -545,6 +550,25 @@ jobs:
               printf '—'
             fi
           }
+
+          # Build the changelog from the git commits between the previous tag
+          # and this one. The previous tag is the most recent tag reachable
+          # from the commit just before this release tag.
+          prev_tag="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+          if [[ -n "$prev_tag" ]]; then
+            commit_range="${prev_tag}..${TAG}"
+            range_label="$prev_tag"
+          else
+            commit_range="${TAG}"
+            range_label="the first commit"
+          fi
+          changelog="$(git log "$commit_range" --merges --first-parent --pretty=format:'- %s (%h)' 2>/dev/null || true)"
+          if [[ -z "$changelog" ]]; then
+            changelog="- No code changes recorded for this release."
+          fi
+          echo "--- changelog (${commit_range}) ---"
+          echo "$changelog"
+
           {
             echo "## Nuvio ${VERSION}"
             echo
@@ -562,6 +586,18 @@ jobs:
             printf '| x86_64 | %s | %s | — |\n' \
               "$(link "Nuvio-${VERSION}-android-full-x86_64.apk" "APK")" \
               "$(link "Nuvio-${VERSION}-android-playstore-x86_64.apk" "APK")"
+            echo
+            echo
+            echo "### Changelog"
+            echo
+            echo "<details>"
+            echo "<summary>Changes since ${range_label}</summary>"
+            echo
+            echo "<!-- nuvio:changelog:start -->"
+            echo "$changelog"
+            echo "<!-- nuvio:changelog:end -->"
+            echo
+            echo "</details>"
             echo
             echo "### Notes"
             echo
