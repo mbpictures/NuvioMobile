@@ -649,7 +649,13 @@ actual fun EnterImmersivePlayerMode(keepScreenAwake: Boolean) = Unit
 actual fun ManagePlayerPictureInPicture(
     isPlaying: Boolean,
     playerSize: IntSize,
-) = Unit
+): PlayerPictureInPictureController = DisabledPlayerPictureInPictureController
+
+private object DisabledPlayerPictureInPictureController : PlayerPictureInPictureController {
+    override val isSupported: Boolean = false
+    override val isActive: Boolean = false
+    override fun enter() = Unit
+}
 
 @Composable
 actual fun rememberPlayerGestureController(): PlayerGestureController? = null
