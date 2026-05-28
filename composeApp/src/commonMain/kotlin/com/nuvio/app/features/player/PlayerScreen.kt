@@ -365,10 +365,11 @@ fun PlayerScreen(
             }
         }
 
-        ManagePlayerPictureInPicture(
+        val pipController = ManagePlayerPictureInPicture(
             isPlaying = playbackSnapshot.isPlaying,
             playerSize = layoutSize,
         )
+        val isInPictureInPicture = pipController.isActive
 
         val playbackSession = remember(
             contentType,
@@ -2219,7 +2220,7 @@ fun PlayerScreen(
             )
 
             AnimatedVisibility(
-                visible = pausedOverlayVisible && !controlsVisible && !playerControlsLocked,
+                visible = pausedOverlayVisible && !controlsVisible && !playerControlsLocked && !isInPictureInPicture,
                 enter = fadeIn(animationSpec = tween(durationMillis = 220)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 180)),
             ) {
@@ -2239,7 +2240,7 @@ fun PlayerScreen(
             }
 
             AnimatedVisibility(
-                visible = (controlsVisible || showParentalGuide) && !playerControlsLocked,
+                visible = (controlsVisible || showParentalGuide) && !playerControlsLocked && !isInPictureInPicture,
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
@@ -2285,6 +2286,11 @@ fun PlayerScreen(
                     } else {
                         null
                     },
+                    onPictureInPictureClick = if (pipController.isSupported) {
+                        { pipController.enter() }
+                    } else {
+                        null
+                    },
                     onSourcesClick = if (activeVideoId != null) { { openSourcesPanel() } } else null,
                     onEpisodesClick = if (isSeries) { { openEpisodesPanel() } } else null,
                     onSubmitIntroClick = if (isSeries && playerSettingsUiState.introSubmitEnabled && playerSettingsUiState.introDbApiKey.isNotBlank()) { { showSubmitIntroModal = true } } else null,
@@ -2307,7 +2313,7 @@ fun PlayerScreen(
             }
 
             AnimatedVisibility(
-                visible = playerControlsLocked && lockedOverlayVisible,
+                visible = playerControlsLocked && lockedOverlayVisible && !isInPictureInPicture,
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
@@ -2322,7 +2328,7 @@ fun PlayerScreen(
             }
 
             AnimatedVisibility(
-                visible = playerSettingsUiState.showLoadingOverlay && !initialLoadCompleted && errorMessage == null,
+                visible = playerSettingsUiState.showLoadingOverlay && !initialLoadCompleted && errorMessage == null && !isInPictureInPicture,
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
@@ -2337,7 +2343,7 @@ fun PlayerScreen(
             }
 
             AnimatedVisibility(
-                visible = currentGestureFeedback != null,
+                visible = currentGestureFeedback != null && !isInPictureInPicture,
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
@@ -2358,7 +2364,7 @@ fun PlayerScreen(
             }
 
             // Skip intro/recap/outro button
-            if (!playerControlsLocked) {
+            if (!playerControlsLocked && !isInPictureInPicture) {
                 SkipIntroButton(
                     interval = if (!initialLoadCompleted || pausedOverlayVisible) null else activeSkipInterval,
                     dismissed = skipIntervalDismissed,
@@ -2377,7 +2383,7 @@ fun PlayerScreen(
             }
 
             // Next episode card
-            if (isSeries && !playerControlsLocked) {
+            if (isSeries && !playerControlsLocked && !isInPictureInPicture) {
                 NextEpisodeCard(
                     nextEpisode = nextEpisodeInfo,
                     visible = showNextEpisodeCard,
