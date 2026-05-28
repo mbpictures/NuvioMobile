@@ -164,7 +164,11 @@ fun HomeHeroSection(
             }
 
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(enabled = onItemClick != null) {
+                        onItemClick?.invoke(currentItem)
+                    },
             ) {
                 visiblePages.forEach { layer ->
                     AsyncImage(
@@ -240,7 +244,6 @@ fun HomeHeroSection(
                                 HeroContentBlock(
                                     item = items[layer.page],
                                     layout = layout,
-                                    onItemClick = onItemClick,
                                 )
                             }
                         }
@@ -345,7 +348,6 @@ fun HomeHeroReservedSpace(
 private fun HeroContentBlock(
     item: MetaPreview,
     layout: HomeHeroLayout,
-    onItemClick: ((MetaPreview) -> Unit)?,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -357,21 +359,14 @@ private fun HeroContentBlock(
                 contentDescription = item.name,
                 modifier = Modifier
                     .fillMaxWidth(layout.logoWidthFraction)
-                    .aspectRatio(2.6f)
-                    .clickable(enabled = onItemClick != null) {
-                        onItemClick?.invoke(item)
-                    },
+                    .aspectRatio(2.6f),
                 alignment = Alignment.Center,
                 contentScale = ContentScale.Fit,
             )
         } else {
             Text(
                 text = item.name,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = onItemClick != null) {
-                        onItemClick?.invoke(item)
-                    },
+                modifier = Modifier.fillMaxWidth(),
                 style = if (layout.isTablet) {
                     MaterialTheme.typography.displaySmall
                 } else {
