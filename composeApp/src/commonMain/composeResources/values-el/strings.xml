@@ -477,6 +477,7 @@
     <string name="settings_playback_decoder_prefer_app">Προτίμηση εφαρμογής (FFmpeg)</string>
     <string name="settings_playback_decoder_prefer_device">Προτίμηση συσκευής</string>
     <string name="settings_playback_decoder_priority">Προτεραιότητα αποκωδικοποιητή</string>
+    <string name="player_decoder_fallback_toast">Αποτυχία αποκωδικοποιητή υλικού. Εναλλαγή σε αποκωδικοποιητή λογισμικού για αυτή τη ροή.</string>
     <string name="settings_playback_dialog_close">Πατήστε εκτός για κλείσιμο</string>
     <string name="settings_playback_dialog_save_close">Πατήστε εκτός για αποθήκευση &amp; κλείσιμο</string>
     <string name="settings_playback_duration_day_one">%1$d ημέρα</string>

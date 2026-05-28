@@ -649,6 +649,7 @@
     <string name="settings_playback_decoder_prefer_app">Upřednostnit dekodéry aplikace (FFmpeg)</string>
     <string name="settings_playback_decoder_prefer_device">Upřednostnit dekodéry zařízení</string>
     <string name="settings_playback_decoder_priority">Priorita dekodéru</string>
+    <string name="player_decoder_fallback_toast">Hardwarový dekodér selhal. Přepíná se na softwarový dekodér pro tento stream.</string>
     <string name="settings_playback_dialog_close">Klepnutím mimo zavřete</string>
     <string name="settings_playback_dialog_save_close">Klepnutím mimo uložíte a zavřete</string>
     <string name="settings_playback_duration_day_one">%1$d den</string>

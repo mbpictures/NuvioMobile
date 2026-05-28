@@ -146,9 +146,9 @@ internal fun OpeningOverlay(
         NuvioBackButton(
             onClick = onBack,
             modifier = Modifier
-                .align(Alignment.TopEnd)
+                .align(Alignment.TopStart)
                 .windowInsetsPadding(WindowInsets.safeContent.only(WindowInsetsSides.Top))
-                .padding(top = 20.dp, start = horizontalSafePadding, end = horizontalSafePadding + 20.dp)
+                .padding(top = 20.dp, start = horizontalSafePadding + 20.dp, end = horizontalSafePadding)
                 ,
             containerColor = Color.Black.copy(alpha = 0.3f),
             contentColor = Color.White,

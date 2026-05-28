@@ -628,6 +628,7 @@
     <string name="settings_playback_decoder_prefer_app">Préférer l'application (FFmpeg)</string>
     <string name="settings_playback_decoder_prefer_device">Préférer l'appareil</string>
     <string name="settings_playback_decoder_priority">Priorité du décodeur</string>
+    <string name="player_decoder_fallback_toast">Échec du décodeur matériel. Passage au décodeur logiciel pour ce flux.</string>
     <string name="settings_playback_dialog_close">Appuyez en dehors pour fermer</string>
     <string name="settings_playback_dialog_save_close">Appuyez en dehors pour enregistrer et fermer</string>
     <string name="settings_playback_duration_day_one">%1$d jour</string>

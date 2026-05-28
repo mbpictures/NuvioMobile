@@ -11,12 +11,14 @@ import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 
 @Composable
@@ -58,8 +60,13 @@ actual fun EnterImmersivePlayerMode(keepScreenAwake: Boolean) {
 actual fun ManagePlayerPictureInPicture(
     isPlaying: Boolean,
     playerSize: IntSize,
-) {
-    val activity = LocalContext.current.findActivity() ?: return
+): PlayerPictureInPictureController {
+    val activity = LocalContext.current.findActivity()
+    val isActive by PlayerPictureInPictureManager.isInPictureInPictureMode.collectAsStateWithLifecycle()
+
+    if (activity == null) {
+        return remember { DisabledPlayerPictureInPictureController }
+    }
 
     DisposableEffect(activity) {
         onDispose {
@@ -75,6 +82,23 @@ actual fun ManagePlayerPictureInPicture(
             playerSize = playerSize,
         )
     }
+
+    val supported = remember(activity) { PlayerPictureInPictureManager.isSupported(activity) }
+    return remember(activity, supported, isActive) {
+        object : PlayerPictureInPictureController {
+            override val isSupported: Boolean = supported
+            override val isActive: Boolean = isActive
+            override fun enter() {
+                PlayerPictureInPictureManager.enterPictureInPicture(activity)
+            }
+        }
+    }
+}
+
+private object DisabledPlayerPictureInPictureController : PlayerPictureInPictureController {
+    override val isSupported: Boolean = false
+    override val isActive: Boolean = false
+    override fun enter() = Unit
 }
 
 @Composable

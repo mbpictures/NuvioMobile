@@ -477,6 +477,7 @@
   <string name="settings_playback_decoder_prefer_app">Preferisci App (FFmpeg)</string>
   <string name="settings_playback_decoder_prefer_device">Preferisci dispositivo</string>
   <string name="settings_playback_decoder_priority">Priorità decoder</string>
+  <string name="player_decoder_fallback_toast">Decoder hardware non riuscito. Passaggio al decoder software per questo stream.</string>
   <string name="settings_playback_dialog_close">Tocca fuori per chiudere</string>
   <string name="settings_playback_dialog_save_close">Tocca fuori per salvare e chiudere</string>
   <string name="settings_playback_duration_day_one">%1$d giorno</string>

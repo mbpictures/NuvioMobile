@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SwapHoriz
@@ -90,6 +91,7 @@ internal fun PlayerControlsShell(
     onSourcesClick: (() -> Unit)? = null,
     onEpisodesClick: (() -> Unit)? = null,
     onSubmitIntroClick: (() -> Unit)? = null,
+    onPictureInPictureClick: (() -> Unit)? = null,
     onFullscreenClick: (() -> Unit)? = null,
     isFullscreen: Boolean = false,
     parentalWarnings: List<ParentalWarning> = emptyList(),
@@ -152,6 +154,7 @@ internal fun PlayerControlsShell(
                 onParentalGuideAnimationComplete = onParentalGuideAnimationComplete,
                 onLockToggle = onLockToggle,
                 onVideoSettingsClick = onVideoSettingsClick,
+                onPictureInPictureClick = onPictureInPictureClick,
                 onFullscreenClick = onFullscreenClick,
                 isFullscreen = isFullscreen,
                 onBack = onBack,
@@ -223,6 +226,7 @@ private fun PlayerHeader(
     onVideoSettingsClick: (() -> Unit)?,
     onFullscreenClick: (() -> Unit)? = null,
     isFullscreen: Boolean = false,
+    onPictureInPictureClick: (() -> Unit)?,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -238,9 +242,24 @@ private fun PlayerHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
-            Box(
+            Row(
                 modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
             ) {
+                if (showActions) {
+                    NuvioBackButton(
+                        onClick = onBack,
+                        containerColor = Color.Black.copy(alpha = 0.35f),
+                        contentColor = Color.White,
+                        buttonSize = metrics.headerIconSize + 16.dp,
+                        iconSize = metrics.headerIconSize,
+                        contentDescription = stringResource(Res.string.compose_player_close),
+                    )
+                }
+                Box(
+                    modifier = Modifier.weight(1f),
+                ) {
                 Column(
                     modifier = Modifier.graphicsLayer { alpha = metadataAlpha },
                     verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -306,6 +325,7 @@ private fun PlayerHeader(
                     onAnimationComplete = onParentalGuideAnimationComplete,
                     contentPadding = PaddingValues(0.dp),
                 )
+                }
             }
 
             if (showActions) {
@@ -335,6 +355,15 @@ private fun PlayerHeader(
                             onClick = onLockToggle,
                         )
                     }
+                    if (onPictureInPictureClick != null) {
+                        PlayerHeaderIconButton(
+                            icon = Icons.Rounded.PictureInPictureAlt,
+                            contentDescription = "Picture in picture",
+                            buttonSize = metrics.headerIconSize + 16.dp,
+                            iconSize = metrics.headerIconSize,
+                            onClick = onPictureInPictureClick,
+                        )
+                    }
                     if (onVideoSettingsClick != null) {
                         PlayerHeaderIconButton(
                             icon = Icons.Rounded.Build,
@@ -353,14 +382,6 @@ private fun PlayerHeader(
                             onClick = onFullscreenClick,
                         )
                     }
-                    NuvioBackButton(
-                        onClick = onBack,
-                        containerColor = Color.Black.copy(alpha = 0.35f),
-                        contentColor = Color.White,
-                        buttonSize = metrics.headerIconSize + 16.dp,
-                        iconSize = metrics.headerIconSize,
-                        contentDescription = stringResource(Res.string.compose_player_close),
-                    )
                 }
             }
         }

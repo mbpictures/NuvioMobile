@@ -320,45 +320,6 @@ fun StreamsScreen(
             }
         }
 
-        AnimatedVisibility(
-            visible = uiState.showDirectAutoPlayOverlay,
-            enter = fadeIn(animationSpec = tween(250)),
-            exit = fadeOut(animationSpec = tween(200)),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.85f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    if (!logo.isNullOrBlank()) {
-                        AsyncImage(
-                            model = logo,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .height(48.dp),
-                            contentScale = ContentScale.Fit,
-                        )
-                    }
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(32.dp),
-                        color = Color.White,
-                        strokeWidth = 2.5.dp,
-                    )
-                    Text(
-                        text = stringResource(Res.string.streams_finding_source),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.8f),
-                    )
-                }
-            }
-        }
-
         StreamActionsSheet(
             stream = streamActionsTarget,
             externalPlayerEnabled = playerSettings.externalPlayerEnabled,
