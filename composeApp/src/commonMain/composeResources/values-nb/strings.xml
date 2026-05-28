@@ -738,6 +738,7 @@
     <string name="settings_playback_decoder_prefer_app">Foretrekk app-dekodere (FFmpeg)</string>
     <string name="settings_playback_decoder_prefer_device">Foretrekk enhets-dekodere</string>
     <string name="settings_playback_decoder_priority">Dekoder-prioritet</string>
+    <string name="player_decoder_fallback_toast">Maskinvaredekoderen feilet. Bytter til programvaredekoder for denne strømmen.</string>
     <string name="settings_playback_dialog_close">Trykk utenfor for å lukke</string>
     <string name="settings_playback_dialog_save_close">Trykk utenfor for å lagre &amp; lukke</string>
     <string name="settings_playback_duration_day_one">%1$d dag</string>

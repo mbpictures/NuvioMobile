@@ -632,6 +632,7 @@
     <string name="settings_playback_decoder_prefer_app">App bevorzugen (FFmpeg)</string>
     <string name="settings_playback_decoder_prefer_device">Gerät bevorzugen</string>
     <string name="settings_playback_decoder_priority">Decoder-Priorität</string>
+    <string name="player_decoder_fallback_toast">Hardware-Decoder fehlgeschlagen. Es wird für diesen Stream auf den Software-Decoder umgeschaltet.</string>
     <string name="settings_playback_dialog_close">Außerhalb tippen, um zu schließen</string>
     <string name="settings_playback_dialog_save_close">Außerhalb tippen, um zu speichern &amp; zu schließen</string>
     <string name="settings_playback_duration_day_one">%1$d Tag</string>

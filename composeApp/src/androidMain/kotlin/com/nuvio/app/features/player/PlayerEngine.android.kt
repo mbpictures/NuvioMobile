@@ -7,6 +7,7 @@ import android.text.SpannableString
 import android.net.Uri
 import android.util.Log
 import android.util.TypedValue
+import android.widget.Toast
 import android.graphics.Typeface
 import android.os.Build
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -118,6 +119,7 @@ actual fun PlatformPlayerSurface(
     val latestExternalSubtitleMimeType = rememberUpdatedState(selectedExternalSubtitleMimeType)
     var decoderPriorityOverride by remember(playerSourceKey) { mutableStateOf<Int?>(null) }
     var fallbackStartPositionMs by remember(playerSourceKey) { mutableStateOf<Long?>(null) }
+    var decoderRecoveryInProgress by remember(playerSourceKey) { mutableStateOf(false) }
     val effectiveDecoderPriority = decoderPriorityOverride ?: playerSettings.decoderPriority
 
     val extractorsFactory = remember {
@@ -256,19 +258,33 @@ actual fun PlatformPlayerSurface(
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 syncPlayerViewKeepScreenOn()
+                Log.w(
+                    TAG,
+                    "onPlayerError code=${error.errorCodeName} effectivePriority=$effectiveDecoderPriority recovering=$decoderRecoveryInProgress",
+                    error,
+                )
+                if (decoderRecoveryInProgress && error.isDecoderFailure()) {
+                    Log.w(TAG, "Decoder fallback also failed (${error.errorCodeName}); surfacing error")
+                    decoderRecoveryInProgress = false
+                    latestOnError.value(error.localizedMessage ?: runBlocking { getString(Res.string.player_unable_to_play_stream) })
+                    return
+                }
+                if (decoderRecoveryInProgress) {
+                    Log.w(TAG, "Suppressing follow-up during decoder recovery: ${error.errorCodeName}")
+                    latestOnError.value(null)
+                    return
+                }
                 if (
-                    playerSettings.decoderPriority == DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON &&
                     effectiveDecoderPriority != DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER &&
                     error.isDecoderFailure()
                 ) {
-                    Log.w(
-                        TAG,
-                        "Decoder failure (${error.errorCodeName}); retrying with app decoders",
-                        error,
-                    )
+                    Log.w(TAG, "Decoder failure (${error.errorCodeName}); retrying with app decoders")
+                    decoderRecoveryInProgress = true
                     fallbackStartPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
                     decoderPriorityOverride = DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
                     latestOnError.value(null)
+                    val toastMessage = runBlocking { getString(Res.string.player_decoder_fallback_toast) }
+                    Toast.makeText(context, toastMessage, Toast.LENGTH_LONG).show()
                     return
                 }
                 latestOnError.value(error.localizedMessage ?: runBlocking { getString(Res.string.player_unable_to_play_stream) })
@@ -285,6 +301,7 @@ actual fun PlatformPlayerSurface(
                 Log.d(TAG, "onPlaybackStateChanged: $stateName")
                 if (playbackState == Player.STATE_READY) {
                     fallbackStartPositionMs = null
+                    decoderRecoveryInProgress = false
                     latestOnError.value(null)
                     exoPlayer.logCurrentTracks("STATE_READY")
                 }

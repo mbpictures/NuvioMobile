@@ -725,6 +725,7 @@
     <string name="settings_playback_decoder_prefer_app">Preferuj aplikację (FFmpeg)</string>
     <string name="settings_playback_decoder_prefer_device">Preferuj urządzenie</string>
     <string name="settings_playback_decoder_priority">Priorytet dekodera</string>
+    <string name="player_decoder_fallback_toast">Dekoder sprzętowy zawiódł. Przełączanie na dekoder programowy dla tego strumienia.</string>
     <string name="settings_playback_dialog_close">Dotknij poza oknem, aby zamknąć</string>
     <string name="settings_playback_dialog_save_close">Dotknij poza oknem, aby zapisać i zamknąć</string>
     <string name="settings_playback_duration_day_one">%1$d dzień</string>

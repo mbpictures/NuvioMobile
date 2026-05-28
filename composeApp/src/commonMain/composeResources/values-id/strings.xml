@@ -681,6 +681,7 @@
     <string name="settings_playback_decoder_prefer_app">Utamakan dekoder aplikasi (FFmpeg)</string>
     <string name="settings_playback_decoder_prefer_device">Utamakan dekoder perangkat</string>
     <string name="settings_playback_decoder_priority">Prioritas Dekoder</string>
+    <string name="player_decoder_fallback_toast">Dekoder perangkat keras gagal. Beralih ke dekoder perangkat lunak untuk streaming ini.</string>
     <string name="settings_playback_dialog_close">Ketuk di luar untuk menutup</string>
     <string name="settings_playback_dialog_save_close">Ketuk di luar untuk menyimpan &amp; menutup</string>
     <string name="settings_playback_duration_day_one">%1$d hari</string>
