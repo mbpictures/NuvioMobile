@@ -58,6 +58,13 @@ private const val gitHubRepo = "NuvioMobile"
 private const val gitHubApiBase = "https://api.github.com"
 private const val releaseChannelBranch = "fork-main"
 
+// The release workflow wraps the auto-generated changelog between these markers
+// inside a collapsible <details> block. We extract just that section so the
+// in-app updater can show a clean changelog instead of the full markdown body
+// (download tables, HTML tags, etc.). Keep in sync with .github/workflows/release.yml.
+private const val changelogStartMarker = "<!-- nuvio:changelog:start -->"
+private const val changelogEndMarker = "<!-- nuvio:changelog:end -->"
+
 data class AppUpdate(
     val tag: String,
     val title: String,
@@ -175,12 +182,36 @@ private object AppUpdaterRepository {
         AppUpdate(
             tag = tag,
             title = release.name?.takeIf { it.isNotBlank() } ?: tag,
-            notes = release.body.orEmpty(),
+            notes = extractChangelog(release.body),
             releaseUrl = release.htmlUrl,
             assetName = asset.name,
             assetUrl = asset.browserDownloadUrl,
             assetSizeBytes = asset.size,
         )
+    }
+
+    /**
+     * Pulls the changelog out of the release body. The release workflow emits a
+     * collapsible block whose changelog lines are fenced by [changelogStartMarker]
+     * and [changelogEndMarker]. When present we return just those lines so the
+     * dialog shows a clean changelog; otherwise we fall back to the full body.
+     */
+    private fun extractChangelog(body: String?): String {
+        val raw = body.orEmpty()
+        if (raw.isBlank()) return ""
+
+        val start = raw.indexOf(changelogStartMarker)
+        if (start < 0) return raw.trim()
+
+        val contentStart = start + changelogStartMarker.length
+        val end = raw.indexOf(changelogEndMarker, startIndex = contentStart)
+        val content = if (end < 0) {
+            raw.substring(contentStart)
+        } else {
+            raw.substring(contentStart, end)
+        }
+
+        return content.trim().ifBlank { raw.trim() }
     }
 
     private fun GitHubReleaseDto.matchesRequestedChannel(): Boolean {
