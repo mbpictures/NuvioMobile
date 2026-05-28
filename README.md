@@ -32,16 +32,16 @@ The mobile app is built from a single shared codebase in [composeApp](./composeA
 
 ### Android
 
-Download the latest Android build from [GitHub Releases](https://github.com/NuvioMedia/NuvioMobile/releases/latest).
+Download the latest Android build from [GitHub Releases](https://github.com/mbpictures/NuvioMobile/releases/latest).
 
 ### iOS
 
-- [TestFlight](https://testflight.apple.com/join/u4y7MHK9)
+Download the latest iOS build from [GitHub Releases](https://github.com/mbpictures/NuvioMobile/releases/latest) and sideload it to your device, e.g. by using [sidestore](https://sidestore.io/).
 
 ## Development
 
 ```bash
-git clone https://github.com/NuvioMedia/NuvioMobile.git
+git clone https://github.com/mbpictures/NuvioMobile.git
 cd NuvioMobile
 ./scripts/run-mobile.sh android
 # or
