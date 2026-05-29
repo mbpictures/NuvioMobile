@@ -32,6 +32,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.network.NetworkCondition
 import com.nuvio.app.core.network.NetworkStatusRepository
+import com.nuvio.app.core.ui.LocalWindowChromeTopInset
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.features.details.components.DetailActionButtons
 import com.nuvio.app.features.details.components.DetailAdditionalInfoSection
@@ -390,7 +391,7 @@ internal fun MetaDetailsScreenDesktop(
                     onClick = onBack,
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(start = 16.dp, top = 16.dp)
+                        .padding(start = 16.dp, top = 16.dp + LocalWindowChromeTopInset.current)
                         .zIndex(2f),
                     containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.6f),
                     contentColor = MaterialTheme.colorScheme.onBackground,

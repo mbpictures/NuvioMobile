@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import com.nuvio.app.core.ui.nuvioStatusBarsTopPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -146,7 +147,7 @@ fun PersonDetailScreen(
         IconButton(
             onClick = onBack,
             modifier = Modifier
-                .windowInsetsPadding(WindowInsets.statusBars)
+                .nuvioStatusBarsTopPadding()
                 .padding(start = 4.dp, top = 4.dp)
                 .align(Alignment.TopStart),
         ) {
@@ -265,7 +266,7 @@ private fun PersonDetailContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(scrollState)
-                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .nuvioStatusBarsTopPadding()
                     .padding(top = 48.dp),
             ) {
                 HeroSection(
@@ -530,7 +531,7 @@ private fun PersonDetailSkeleton(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .windowInsetsPadding(WindowInsets.statusBars)
+                .nuvioStatusBarsTopPadding()
                 .padding(top = 48.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {

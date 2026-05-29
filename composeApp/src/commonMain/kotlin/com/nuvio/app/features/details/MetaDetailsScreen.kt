@@ -60,6 +60,7 @@ import com.nuvio.app.core.network.NetworkStatusRepository
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.TraktListPickerDialog
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.core.ui.nuvioStatusBarTopPadding
 import com.nuvio.app.features.details.components.DetailActionButtons
 import com.nuvio.app.features.details.components.CommentDetailSheet
 import com.nuvio.app.features.details.components.DetailAdditionalInfoSection
@@ -706,10 +707,7 @@ internal fun MetaDetailsScreenMobile(
                 val scrollState = rememberScrollState()
                 val density = LocalDensity.current
                 val safeAreaTopPx = with(density) {
-                    WindowInsets.statusBars
-                        .asPaddingValues()
-                        .calculateTopPadding()
-                        .toPx()
+                    nuvioStatusBarTopPadding().toPx()
                 }
                 var heroHeightPx by remember(meta.id) { mutableIntStateOf(0) }
                 val thresholdPx = (heroHeightPx - safeAreaTopPx).coerceAtLeast(0f)
@@ -876,7 +874,7 @@ internal fun MetaDetailsScreenMobile(
                                 onClick = onBack,
                                 modifier = Modifier.padding(
                                     start = 12.dp,
-                                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
+                                    top = nuvioStatusBarTopPadding() + 8.dp,
                                 ).zIndex(2f),
                                 containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
                                 contentColor = MaterialTheme.colorScheme.onBackground,
@@ -1128,7 +1126,7 @@ internal fun MetaDetailsScreenMobile(
                 onClick = onBack,
                 modifier = Modifier.padding(
                     start = 12.dp,
-                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
+                    top = nuvioStatusBarTopPadding() + 8.dp,
                 ),
                 containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
                 contentColor = MaterialTheme.colorScheme.onBackground,
