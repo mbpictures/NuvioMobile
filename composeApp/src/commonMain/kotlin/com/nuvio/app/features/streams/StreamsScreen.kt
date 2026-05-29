@@ -89,6 +89,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.nuvioSecondaryClick
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.core.ui.nuvioStatusBarTopPadding
 import com.nuvio.app.features.debrid.DebridProviders
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsRepository
@@ -181,6 +182,7 @@ fun StreamsScreen(
             (resumePositionMs ?: storedProgress?.takeIf { it.isResumable }?.lastPositionMs)?.takeIf { it > 0L }
         }
     }
+    val statusBarTop = nuvioStatusBarTopPadding()
 
     LaunchedEffect(type, videoId, seasonNumber, episodeNumber, manualSelection) {
         StreamsRepository.load(
@@ -278,6 +280,7 @@ fun StreamsScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                    .padding(top = statusBarTop)
                     .padding(start = 12.dp, top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
