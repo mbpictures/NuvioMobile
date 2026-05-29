@@ -371,6 +371,7 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
             )
             macOS {
                 dockName = "Nuvio"
@@ -393,6 +394,15 @@ compose.desktop {
                 val winIcon = project.file("desktop-icons/nuvio.ico")
                 if (winIcon.exists()) {
                     iconFile.set(winIcon)
+                }
+            }
+            linux {
+                // Adds a desktop launcher entry so the installed .deb shows up in app menus.
+                menuGroup = "Nuvio"
+                shortcut = true
+                val linuxIcon = project.file("desktop-icons/nuvio.png")
+                if (linuxIcon.exists()) {
+                    iconFile.set(linuxIcon)
                 }
             }
         }
