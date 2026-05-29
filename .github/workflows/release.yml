@@ -562,7 +562,7 @@ jobs:
             commit_range="${TAG}"
             range_label="the first commit"
           fi
-          changelog="$(git log "$commit_range" --merges --first-parent --pretty=format:'- %s (%h)' 2>/dev/null || true)"
+          changelog="$(git log "$commit_range" --first-parent --pretty=format:'- %s (%h)' 2>/dev/null || true)"
           if [[ -z "$changelog" ]]; then
             changelog="- No code changes recorded for this release."
           fi
