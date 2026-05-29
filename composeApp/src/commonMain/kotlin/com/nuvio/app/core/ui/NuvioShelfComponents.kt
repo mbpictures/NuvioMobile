@@ -345,10 +345,11 @@ internal fun Modifier.posterCardClickable(
     onLongClick: (() -> Unit)?,
 ): Modifier =
     if (onClick != null || onLongClick != null) {
-        combinedClickable(
-            onClick = { onClick?.invoke() },
-            onLongClick = onLongClick,
-        )
+        nuvioSecondaryClick(onLongClick)
+            .combinedClickable(
+                onClick = { onClick?.invoke() },
+                onLongClick = onLongClick,
+            )
     } else {
         this
     }

@@ -95,7 +95,7 @@ actual object ThemeSettingsStorage {
         profileScopedSyncKeys.forEach { key ->
             NSUserDefaults.standardUserDefaults.removeObjectForKey(ProfileScopedKey.of(key))
         }
-        globalSyncKeys.forEach { key ->
+        globalSyncKeys.filter(payload::containsKey).forEach { key ->
             NSUserDefaults.standardUserDefaults.removeObjectForKey(key)
         }
 

@@ -24,6 +24,10 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -49,6 +54,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
+import com.nuvio.app.isDesktop
 import com.nuvio.app.features.home.MetaPreview
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -68,6 +74,7 @@ private const val HERO_SWIPE_VELOCITY_THRESHOLD = 300f
 private const val MOBILE_HERO_VIEWPORT_RATIO = 0.82f
 private const val MOBILE_HERO_MIN_HEIGHT_DP = 360f
 private const val MOBILE_HERO_MAX_HEIGHT_DP = 760f
+private const val TABLET_HERO_VIEWPORT_RATIO = 0.62f
 
 internal data class HomeHeroLayout(
     val isTablet: Boolean,
@@ -296,8 +303,66 @@ fun HomeHeroSection(
                         }
                     }
                 }
+
+                if (isDesktop && items.size > 1) {
+                    HeroNavButton(
+                        icon = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                        contentDescription = stringResource(Res.string.action_previous),
+                        enabled = currentPage > 0,
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = layout.contentHorizontalPadding),
+                        onClick = {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(
+                                    (pagerState.currentPage - 1).coerceAtLeast(0),
+                                )
+                            }
+                        },
+                    )
+                    HeroNavButton(
+                        icon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = stringResource(Res.string.action_next),
+                        enabled = currentPage < items.size - 1,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = layout.contentHorizontalPadding),
+                        onClick = {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(
+                                    (pagerState.currentPage + 1).coerceAtMost(items.size - 1),
+                                )
+                            }
+                        },
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun HeroNavButton(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.4f))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = if (enabled) 1f else 0.3f),
+            modifier = Modifier.size(28.dp),
+        )
     }
 }
 
@@ -419,7 +484,13 @@ internal fun homeHeroLayout(
     when {
         maxWidthDp >= 1200f -> HomeHeroLayout(
             isTablet = true,
-            heroHeight = (maxWidthDp * 0.42f).dp.coerceIn(360.dp, 440.dp),
+            heroHeight = tabletHeroHeight(
+                maxWidthDp = maxWidthDp,
+                viewportHeightDp = viewportHeightDp,
+                widthRatio = 0.42f,
+                minHeight = 500.dp,
+                maxHeight = 640.dp,
+            ),
             contentMaxWidth = 640.dp,
             contentWidthFraction = 0.56f,
             contentHorizontalPadding = 56.dp,
@@ -429,7 +500,13 @@ internal fun homeHeroLayout(
         )
         maxWidthDp >= 840f -> HomeHeroLayout(
             isTablet = true,
-            heroHeight = (maxWidthDp * 0.46f).dp.coerceIn(340.dp, 420.dp),
+            heroHeight = tabletHeroHeight(
+                maxWidthDp = maxWidthDp,
+                viewportHeightDp = viewportHeightDp,
+                widthRatio = 0.46f,
+                minHeight = 460.dp,
+                maxHeight = 580.dp,
+            ),
             contentMaxWidth = 560.dp,
             contentWidthFraction = 0.62f,
             contentHorizontalPadding = 40.dp,
@@ -439,7 +516,13 @@ internal fun homeHeroLayout(
         )
         maxWidthDp >= 600f -> HomeHeroLayout(
             isTablet = true,
-            heroHeight = (maxWidthDp * 0.58f).dp.coerceIn(320.dp, 380.dp),
+            heroHeight = tabletHeroHeight(
+                maxWidthDp = maxWidthDp,
+                viewportHeightDp = viewportHeightDp,
+                widthRatio = 0.58f,
+                minHeight = 420.dp,
+                maxHeight = 520.dp,
+            ),
             contentMaxWidth = 520.dp,
             contentWidthFraction = 0.72f,
             contentHorizontalPadding = 32.dp,
@@ -480,6 +563,19 @@ private fun mobileHeroHeight(
     }
 
     return cappedHeight.coerceIn(MOBILE_HERO_MIN_HEIGHT_DP.dp, MOBILE_HERO_MAX_HEIGHT_DP.dp)
+}
+
+private fun tabletHeroHeight(
+    maxWidthDp: Float,
+    viewportHeightDp: Float?,
+    widthRatio: Float,
+    minHeight: Dp,
+    maxHeight: Dp,
+): Dp {
+    val widthDrivenHeight = (maxWidthDp * widthRatio).dp
+    val viewportDrivenHeight = viewportHeightDp?.let { (it * TABLET_HERO_VIEWPORT_RATIO).dp }
+    val baseHeight = maxOf(widthDrivenHeight, viewportDrivenHeight ?: widthDrivenHeight)
+    return baseHeight.coerceIn(minHeight, maxHeight)
 }
 
 @Composable

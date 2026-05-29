@@ -83,7 +83,7 @@ fun NuvioScreen(
     listState: LazyListState = rememberLazyListState(),
     content: LazyListScope.() -> Unit,
 ) {
-    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusBarTop = nuvioStatusBarTopPadding()
     LazyColumn(
         state = listState,
         modifier = modifier
@@ -140,7 +140,7 @@ fun NuvioScreenHeader(
     onBack: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
-    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusBarTop = nuvioStatusBarTopPadding()
     val resolvedTopPadding = topPadding ?: if (includeStatusBarPadding) statusBarTop else 0.dp
     Row(
         modifier = modifier
@@ -469,7 +469,7 @@ fun NuvioToastHost(
     modifier: Modifier = Modifier,
 ) {
     val toast by NuvioToastController.currentToast.collectAsState()
-    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusBarTop = nuvioStatusBarTopPadding()
     val visibilityState = remember { MutableTransitionState(false) }
     var renderedToast by remember { mutableStateOf<NuvioToastMessage?>(null) }
 

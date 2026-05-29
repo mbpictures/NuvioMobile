@@ -1082,6 +1082,7 @@
     <string name="details_series_no_metadata">This addon did not provide episode metadata for this series.</string>
     <string name="details_series_unpublished">Episodes have not been published by this addon yet.</string>
     <string name="details_servers_unreachable">Your device is online, but Nuvio could not reach required servers.</string>
+    <string name="streams_select_episode_prompt">Select an episode to view available streams</string>
     <string name="details_show_less">Show Less</string>
     <string name="details_show_more">Show More ▾</string>
     <string name="details_writer">Writer</string>

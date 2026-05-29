@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
 import coil3.compose.AsyncImage
 import com.nuvio.app.features.details.MetaDetails
+import com.nuvio.app.features.home.components.homeHeroLayout
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -33,6 +34,7 @@ fun DetailHero(
     meta: MetaDetails,
     isTablet: Boolean = false,
     scrollOffset: Int = 0,
+    viewportHeight: Dp? = null,
     contentMaxWidth: Dp = 560.dp,
     onHeightChanged: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -40,7 +42,10 @@ fun DetailHero(
     BoxWithConstraints(
         modifier = modifier.fillMaxWidth(),
     ) {
-        val heroHeight = detailHeroHeight(maxWidth, isTablet)
+        val heroHeight = homeHeroLayout(
+            maxWidthDp = maxWidth.value,
+            viewportHeightDp = viewportHeight?.value,
+        ).heroHeight
 
         Box(
             modifier = Modifier
@@ -136,10 +141,3 @@ fun DetailHero(
         }
     }
 }
-
-private fun detailHeroHeight(maxWidth: Dp, isTablet: Boolean): Dp =
-    if (!isTablet) {
-        (maxWidth * 1.33f).coerceIn(420.dp, 760.dp)
-    } else {
-        (maxWidth * 0.42f).coerceIn(300.dp, 420.dp)
-    }

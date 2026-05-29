@@ -47,6 +47,7 @@ import coil3.compose.AsyncImage
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import com.nuvio.app.core.ui.landscapePosterHeightForWidth
+import com.nuvio.app.core.ui.nuvioStatusBarsTopPadding
 import com.nuvio.app.core.ui.landscapePosterWidth
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.details.components.DetailPosterRailSection
@@ -121,7 +122,7 @@ fun TmdbEntityBrowseScreen(
         IconButton(
             onClick = onBack,
             modifier = Modifier
-                .windowInsetsPadding(WindowInsets.statusBars)
+                .nuvioStatusBarsTopPadding()
                 .padding(start = 4.dp, top = 4.dp)
                 .align(Alignment.TopStart),
         ) {
@@ -191,7 +192,7 @@ private fun EntityBrowseContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .nuvioStatusBarsTopPadding()
                     .padding(top = 56.dp),
             ) {
                 EntityHeroSection(
@@ -326,7 +327,7 @@ private fun EntityBrowseSkeleton() {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .windowInsetsPadding(WindowInsets.statusBars)
+            .nuvioStatusBarsTopPadding()
             .padding(top = 56.dp),
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {

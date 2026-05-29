@@ -176,8 +176,8 @@ private object AppUpdaterRepository {
             ?: release.name?.takeIf { it.isNotBlank() }
             ?: error("Release has no tag or name")
 
-        val asset = chooseBestApkAsset(release.assets)
-            ?: error("No APK asset found in the cmp-rewrite release")
+        val asset = chooseBestAsset(release.assets)
+            ?: error("No installable asset found in the $releaseChannelBranch release")
 
         AppUpdate(
             tag = tag,
@@ -225,26 +225,49 @@ private object AppUpdaterRepository {
             .any { value -> value.contains(channel, ignoreCase = true) }
     }
 
-    private fun chooseBestApkAsset(assets: List<GitHubAssetDto>): GitHubAssetDto? {
-        val apkAssets = assets.filter { asset ->
-            asset.name.endsWith(".apk", ignoreCase = true) ||
-                asset.contentType == "application/vnd.android.package-archive"
+    /**
+     * Picks the release asset to install for the current platform. Extensions
+     * are tried in the priority order [AppUpdaterPlatform.getAssetFileExtensions]
+     * returns them (e.g. prefer `.msi` over `.exe` on Windows): the first
+     * extension with any matching asset wins, then the group is narrowed by
+     * distribution flavor / ABI (which only matters on Android).
+     */
+    private fun chooseBestAsset(assets: List<GitHubAssetDto>): GitHubAssetDto? {
+        val extensions = AppUpdaterPlatform.getAssetFileExtensions()
+        if (extensions.isEmpty()) return null
+
+        for (extension in extensions) {
+            val matches = assets.filter { asset -> assetMatchesExtension(asset, extension) }
+            if (matches.isNotEmpty()) {
+                return selectByFlavorAndAbi(matches)
+            }
         }
-        if (apkAssets.isEmpty()) return null
+        return null
+    }
+
+    private fun assetMatchesExtension(asset: GitHubAssetDto, extension: String): Boolean {
+        if (asset.name.endsWith(".$extension", ignoreCase = true)) return true
+        // Defensive fallback for APKs whose asset name omits the extension.
+        return extension.equals("apk", ignoreCase = true) &&
+            asset.contentType == "application/vnd.android.package-archive"
+    }
+
+    private fun selectByFlavorAndAbi(candidates: List<GitHubAssetDto>): GitHubAssetDto? {
+        if (candidates.isEmpty()) return null
 
         val flavor = AppUpdaterPlatform.getDistributionFlavor()
         val knownFlavors = listOf("full", "playstore")
         val flavorFiltered = if (flavor.isNotBlank()) {
-            val matchingFlavor = apkAssets.filter { containsTokenIgnoreCase(it.name, flavor) }
+            val matchingFlavor = candidates.filter { containsTokenIgnoreCase(it.name, flavor) }
             if (matchingFlavor.isNotEmpty()) {
                 matchingFlavor
             } else {
                 val otherFlavors = knownFlavors.filter { !it.equals(flavor, ignoreCase = true) }
-                apkAssets.filterNot { asset -> otherFlavors.any { other -> containsTokenIgnoreCase(asset.name, other) } }
-                    .ifEmpty { apkAssets }
+                candidates.filterNot { asset -> otherFlavors.any { other -> containsTokenIgnoreCase(asset.name, other) } }
+                    .ifEmpty { candidates }
             }
         } else {
-            apkAssets
+            candidates
         }
 
         if (flavorFiltered.size == 1) return flavorFiltered.first()

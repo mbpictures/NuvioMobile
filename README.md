@@ -54,6 +54,7 @@ cd NuvioMobile
 - `composeApp/src/commonMain/` contains shared UI, features, repositories, and platform-agnostic logic.
 - `composeApp/src/androidMain/` contains Android-specific integrations.
 - `composeApp/src/iosMain/` contains iOS-specific integrations.
+- `composeApp/src/desktopMain/` contains desktop-specific integrations.
 - `iosApp/` contains the native Xcode project and iOS entry point.
 
 Useful commands:

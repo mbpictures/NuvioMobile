@@ -60,6 +60,7 @@ import com.nuvio.app.core.network.NetworkStatusRepository
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.TraktListPickerDialog
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.core.ui.nuvioStatusBarTopPadding
 import com.nuvio.app.features.details.components.DetailActionButtons
 import com.nuvio.app.features.details.components.CommentDetailSheet
 import com.nuvio.app.features.details.components.DetailAdditionalInfoSection
@@ -99,16 +100,81 @@ import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
+import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.watching.application.WatchingActions
 import com.nuvio.app.features.watching.application.WatchingState
+import com.nuvio.app.isDesktop
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
+data class PlayableTarget(
+    val type: String,
+    val videoId: String,
+    val parentMetaId: String,
+    val parentMetaType: String,
+    val title: String,
+    val logo: String?,
+    val poster: String?,
+    val background: String?,
+    val seasonNumber: Int?,
+    val episodeNumber: Int?,
+    val episodeTitle: String?,
+    val episodeThumbnail: String?,
+    val pauseDescription: String?,
+    val resumePositionMs: Long?,
+)
+
 @Composable
 @OptIn(ExperimentalSharedTransitionApi::class)
 fun MetaDetailsScreen(
+    type: String,
+    id: String,
+    onBack: () -> Unit,
+    onPlay: ((type: String, videoId: String, parentMetaId: String, parentMetaType: String, title: String, logo: String?, poster: String?, background: String?, seasonNumber: Int?, episodeNumber: Int?, episodeTitle: String?, episodeThumbnail: String?, pauseDescription: String?, resumePositionMs: Long?) -> Unit)? = null,
+    onPlayManually: ((type: String, videoId: String, parentMetaId: String, parentMetaType: String, title: String, logo: String?, poster: String?, background: String?, seasonNumber: Int?, episodeNumber: Int?, episodeTitle: String?, episodeThumbnail: String?, pauseDescription: String?, resumePositionMs: Long?) -> Unit)? = null,
+    onLaunchStream: ((target: PlayableTarget, stream: StreamItem, forceExternal: Boolean, forceInternal: Boolean, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit)? = null,
+    onOpenMeta: ((MetaPreview) -> Unit)? = null,
+    onCastClick: ((MetaPerson, String?) -> Unit)? = null,
+    onCompanyClick: ((MetaCompany, String) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    modifier: Modifier = Modifier,
+) {
+    if (isDesktop) {
+        MetaDetailsScreenDesktop(
+            type = type,
+            id = id,
+            onBack = onBack,
+            onLaunchStream = onLaunchStream,
+            onOpenMeta = onOpenMeta,
+            onCastClick = onCastClick,
+            onCompanyClick = onCompanyClick,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            modifier = modifier,
+        )
+    } else {
+        MetaDetailsScreenMobile(
+            type = type,
+            id = id,
+            onBack = onBack,
+            onPlay = onPlay,
+            onPlayManually = onPlayManually,
+            onOpenMeta = onOpenMeta,
+            onCastClick = onCastClick,
+            onCompanyClick = onCompanyClick,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalSharedTransitionApi::class)
+internal fun MetaDetailsScreenMobile(
     type: String,
     id: String,
     onBack: () -> Unit,
@@ -641,10 +707,7 @@ fun MetaDetailsScreen(
                 val scrollState = rememberScrollState()
                 val density = LocalDensity.current
                 val safeAreaTopPx = with(density) {
-                    WindowInsets.statusBars
-                        .asPaddingValues()
-                        .calculateTopPadding()
-                        .toPx()
+                    nuvioStatusBarTopPadding().toPx()
                 }
                 var heroHeightPx by remember(meta.id) { mutableIntStateOf(0) }
                 val thresholdPx = (heroHeightPx - safeAreaTopPx).coerceAtLeast(0f)
@@ -660,6 +723,7 @@ fun MetaDetailsScreen(
 
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val isTablet = maxWidth >= 720.dp
+                    val viewportHeight = maxHeight
                     val contentHorizontalPadding = if (isTablet) 32.dp else 18.dp
                     val contentMaxWidth = detailTabletContentMaxWidth(maxWidth, isTablet)
                     val cinematicEnabled = metaScreenSettingsUiState.cinematicBackground
@@ -692,6 +756,7 @@ fun MetaDetailsScreen(
                             DetailHero(
                                 meta = meta,
                                 isTablet = isTablet,
+                                viewportHeight = viewportHeight,
                                 contentMaxWidth = contentMaxWidth,
                                 scrollOffset = scrollState.value,
                                 onHeightChanged = { heroHeightPx = it },
@@ -809,7 +874,7 @@ fun MetaDetailsScreen(
                                 onClick = onBack,
                                 modifier = Modifier.padding(
                                     start = 12.dp,
-                                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
+                                    top = nuvioStatusBarTopPadding() + 8.dp,
                                 ).zIndex(2f),
                                 containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
                                 contentColor = MaterialTheme.colorScheme.onBackground,
@@ -1061,7 +1126,7 @@ fun MetaDetailsScreen(
                 onClick = onBack,
                 modifier = Modifier.padding(
                     start = 12.dp,
-                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
+                    top = nuvioStatusBarTopPadding() + 8.dp,
                 ),
                 containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
                 contentColor = MaterialTheme.colorScheme.onBackground,

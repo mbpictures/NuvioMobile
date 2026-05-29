@@ -33,6 +33,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -40,6 +51,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.core.ui.LocalWindowChromeImmersiveRequest
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.debrid.DirectDebridPlayableResult
@@ -76,6 +88,7 @@ import com.nuvio.app.features.watchprogress.WatchProgressClock
 import com.nuvio.app.features.watchprogress.WatchProgressPlaybackSession
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
+import com.nuvio.app.isDesktop
 import com.nuvio.app.isIos
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
@@ -208,6 +221,26 @@ fun PlayerScreen(
             mild = stringResource(Res.string.parental_severity_mild),
         )
         val gestureController = rememberPlayerGestureController()
+
+        // Ask a custom window chrome (the Windows title bar) to auto-hide while the player is open
+        // so the video is unobstructed; it reappears when the pointer returns to the top edge.
+        val windowChromeImmersiveRequest = LocalWindowChromeImmersiveRequest.current
+        DisposableEffect(windowChromeImmersiveRequest) {
+            windowChromeImmersiveRequest?.invoke(true)
+            onDispose { windowChromeImmersiveRequest?.invoke(false) }
+        }
+
+        val fullscreenController = LocalPlayerFullscreenController.current
+        if (fullscreenController != null) {
+            DisposableEffect(fullscreenController) {
+                val wasFullscreenOnEntry = fullscreenController.isFullscreen
+                onDispose {
+                    if (fullscreenController.isFullscreen != wasFullscreenOnEntry) {
+                        fullscreenController.toggle()
+                    }
+                }
+            }
+        }
         var controlsVisible by rememberSaveable { mutableStateOf(true) }
         var playerControlsLocked by rememberSaveable { mutableStateOf(false) }
         // Active playback state (mutable to support source/episode switching)
@@ -2014,11 +2047,68 @@ fun PlayerScreen(
 
         val systemGestureInsets = WindowInsets.systemGestures
         val gestureLayoutDirection = LocalLayoutDirection.current
+        val playerKeyFocus = remember { FocusRequester() }
+        if (isDesktop) {
+            LaunchedEffect(Unit) {
+                runCatching { playerKeyFocus.requestFocus() }
+            }
+        }
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { layoutSize = it }
+                .then(
+                    if (isDesktop) {
+                        Modifier
+                            .focusRequester(playerKeyFocus)
+                            .focusable()
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) {
+                                    return@onPreviewKeyEvent false
+                                }
+                                when (event.key) {
+                                    Key.Spacebar -> {
+                                        togglePlayback()
+                                        true
+                                    }
+                                    Key.DirectionLeft -> {
+                                        seekBy(-10_000L)
+                                        true
+                                    }
+                                    Key.DirectionRight -> {
+                                        seekBy(10_000L)
+                                        true
+                                    }
+                                    Key.Escape -> {
+                                        val ctrl = fullscreenController
+                                        if (ctrl != null && ctrl.isFullscreen) {
+                                            ctrl.toggle()
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                    else -> false
+                                }
+                            }
+                            .pointerInput(playerControlsLocked) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        val isMouseMove = (event.type == PointerEventType.Move ||
+                                            event.type == PointerEventType.Enter) &&
+                                            event.changes.any { it.type == PointerType.Mouse }
+                                        if (isMouseMove && !playerControlsLocked) {
+                                            controlsVisible = true
+                                        }
+                                    }
+                                }
+                            }
+                    } else {
+                        Modifier
+                    },
+                )
                 .pointerInput(layoutSize) {
                     detectTapGestures(
                         onPress = {
@@ -2257,11 +2347,15 @@ fun PlayerScreen(
                     resizeMode = resizeMode,
                     isLocked = playerControlsLocked,
                     showPlaybackControls = controlsVisible,
-                    onLockToggle = {
-                        if (playerControlsLocked) {
-                            unlockPlayerControls()
-                        } else {
-                            lockPlayerControls()
+                    onLockToggle = if (isDesktop) {
+                        null
+                    } else {
+                        {
+                            if (playerControlsLocked) {
+                                unlockPlayerControls()
+                            } else {
+                                lockPlayerControls()
+                            }
                         }
                     },
                     onBack = onBackWithProgress,
@@ -2294,6 +2388,8 @@ fun PlayerScreen(
                     onSourcesClick = if (activeVideoId != null) { { openSourcesPanel() } } else null,
                     onEpisodesClick = if (isSeries) { { openEpisodesPanel() } } else null,
                     onSubmitIntroClick = if (isSeries && playerSettingsUiState.introSubmitEnabled && playerSettingsUiState.introDbApiKey.isNotBlank()) { { showSubmitIntroModal = true } } else null,
+                    onFullscreenClick = fullscreenController?.let { ctrl -> { ctrl.toggle() } },
+                    isFullscreen = fullscreenController?.isFullscreen == true,
                     parentalWarnings = parentalWarnings,
                     showParentalGuide = showParentalGuide,
                     onParentalGuideAnimationComplete = { showParentalGuide = false },

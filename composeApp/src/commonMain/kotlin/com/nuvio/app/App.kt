@@ -85,9 +85,11 @@ import com.nuvio.app.core.sync.AppForegroundMonitor
 import com.nuvio.app.core.sync.ProfileSettingsSync
 import com.nuvio.app.core.sync.SyncManager
 import com.nuvio.app.core.ui.NuvioNavigationBar
+import com.nuvio.app.core.ui.nuvioStatusBarTopPadding
 import com.nuvio.app.core.ui.NuvioContinueWatchingActionSheet
 import com.nuvio.app.core.ui.NuvioPosterActionSheet
 import com.nuvio.app.core.ui.NuvioStatusModal
+import com.nuvio.app.core.ui.BindPlatformBackNavigation
 import com.nuvio.app.core.ui.PlatformBackHandler
 import com.nuvio.app.core.ui.platformExitApp
 import com.nuvio.app.core.ui.configurePlatformImageLoader
@@ -123,6 +125,7 @@ import com.nuvio.app.features.downloads.DownloadsScreen
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaDetailsScreen
 import com.nuvio.app.features.details.MetaPerson
+import com.nuvio.app.features.details.PlayableTarget
 import com.nuvio.app.features.details.PersonDetailScreen
 import com.nuvio.app.features.details.TmdbEntityBrowseScreen
 import com.nuvio.app.features.tmdb.TmdbEntityKind
@@ -546,6 +549,7 @@ private fun MainAppContent(
     onSwitchProfile: () -> Unit = {},
 ) {
         val navController = rememberNavController()
+        BindPlatformBackNavigation(navController)
         val appUpdaterController = rememberAppUpdaterController()
         remember {
             EpisodeReleaseNotificationsRepository.ensureLoaded()
@@ -988,6 +992,96 @@ private fun MainAppContent(
             )
         }
 
+        fun launchStreamFromTarget(
+            target: PlayableTarget,
+            stream: StreamItem,
+            forceExternal: Boolean,
+            forceInternal: Boolean,
+            resolvedResumePositionMs: Long?,
+            resolvedResumeProgressFraction: Float?,
+        ) {
+            if (DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
+                coroutineScope.launch {
+                    val resolved = DirectDebridPlaybackResolver.resolveToPlayableStream(
+                        stream = stream,
+                        season = target.seasonNumber,
+                        episode = target.episodeNumber,
+                    )
+                    when (resolved) {
+                        is DirectDebridPlayableResult.Success -> launchStreamFromTarget(
+                            target = target,
+                            stream = resolved.stream,
+                            forceExternal = forceExternal,
+                            forceInternal = forceInternal,
+                            resolvedResumePositionMs = resolvedResumePositionMs,
+                            resolvedResumeProgressFraction = resolvedResumeProgressFraction,
+                        )
+                        else -> resolved.toastMessage()?.let { NuvioToastController.show(it) }
+                    }
+                }
+                return
+            }
+            val sourceUrl = stream.playableDirectUrl ?: return
+            if (playerSettingsUiState.streamReuseLastLinkEnabled) {
+                val cacheKey = StreamLinkCacheRepository.contentKey(
+                    type = target.type,
+                    videoId = target.videoId,
+                    parentMetaId = target.parentMetaId,
+                    season = target.seasonNumber,
+                    episode = target.episodeNumber,
+                )
+                StreamLinkCacheRepository.save(
+                    contentKey = cacheKey,
+                    url = sourceUrl,
+                    streamName = stream.streamLabel,
+                    addonName = stream.addonName,
+                    addonId = stream.addonId,
+                    requestHeaders = sanitizePlaybackHeaders(stream.behaviorHints.proxyHeaders?.request),
+                    responseHeaders = sanitizePlaybackResponseHeaders(stream.behaviorHints.proxyHeaders?.response),
+                    filename = stream.behaviorHints.filename,
+                    videoSize = stream.behaviorHints.videoSize,
+                    bingeGroup = stream.behaviorHints.bingeGroup,
+                )
+            }
+            val playerLaunch = PlayerLaunch(
+                title = target.title,
+                sourceUrl = sourceUrl,
+                sourceHeaders = sanitizePlaybackHeaders(stream.behaviorHints.proxyHeaders?.request),
+                sourceResponseHeaders = sanitizePlaybackResponseHeaders(stream.behaviorHints.proxyHeaders?.response),
+                logo = target.logo,
+                poster = target.poster,
+                background = target.background,
+                seasonNumber = target.seasonNumber,
+                episodeNumber = target.episodeNumber,
+                episodeTitle = target.episodeTitle,
+                episodeThumbnail = target.episodeThumbnail,
+                streamTitle = stream.streamLabel,
+                streamSubtitle = stream.streamSubtitle,
+                bingeGroup = stream.behaviorHints.bingeGroup,
+                pauseDescription = target.pauseDescription,
+                providerName = stream.addonName,
+                providerAddonId = stream.addonId,
+                contentType = target.type,
+                videoId = target.videoId,
+                parentMetaId = target.parentMetaId,
+                parentMetaType = target.parentMetaType,
+                initialPositionMs = resolvedResumePositionMs ?: target.resumePositionMs ?: 0L,
+                initialProgressFraction = resolvedResumeProgressFraction,
+            )
+            StreamsRepository.cancelLoading()
+            val useExternal = when {
+                forceInternal -> false
+                forceExternal -> true
+                else -> playerSettingsUiState.externalPlayerEnabled
+            }
+            if (useExternal) {
+                openExternalPlayback(playerLaunch)
+                return
+            }
+            val launchId = PlayerLaunchStore.put(playerLaunch)
+            navController.navigate(PlayerRoute(launchId = launchId))
+        }
+
         val onPlay: (String, String, String, String, String, String?, String?, String?, Int?, Int?, String?, String?, String?, Long?) -> Unit =
             { type, videoId, parentMetaId, parentMetaType, title, logo, poster, background, seasonNumber, episodeNumber, episodeTitle, episodeThumbnail, pauseDescription, resumePositionMs ->
                 launchPlaybackWithDownloadPreference(
@@ -1406,6 +1500,16 @@ private fun MainAppContent(
                         },
                         sharedTransitionScope = this@SharedTransitionLayout,
                         animatedVisibilityScope = this,
+                        onLaunchStream = { target, stream, forceExternal, forceInternal, posMs, frac ->
+                            launchStreamFromTarget(
+                                target = target,
+                                stream = stream,
+                                forceExternal = forceExternal,
+                                forceInternal = forceInternal,
+                                resolvedResumePositionMs = posMs,
+                                resolvedResumeProgressFraction = frac,
+                            )
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -2517,7 +2621,7 @@ private fun TabletFloatingTopBar(
     onAddProfileRequested: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusBarPadding = nuvioStatusBarTopPadding()
 
     Box(
         modifier = modifier

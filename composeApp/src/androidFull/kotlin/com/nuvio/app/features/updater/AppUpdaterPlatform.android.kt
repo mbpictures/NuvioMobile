@@ -5,6 +5,8 @@ actual object AppUpdaterPlatform {
 
     actual fun getSupportedAbis(): List<String> = AndroidAppUpdaterPlatform.getSupportedAbis()
 
+    actual fun getAssetFileExtensions(): List<String> = listOf("apk")
+
     actual fun getDistributionFlavor(): String = "full"
 
     actual fun getIgnoredTag(): String? = AndroidAppUpdaterPlatform.getIgnoredTag()

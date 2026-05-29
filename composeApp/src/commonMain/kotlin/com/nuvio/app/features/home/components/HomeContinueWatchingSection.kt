@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.NuvioProgressBar
 import com.nuvio.app.core.ui.NuvioShelfSection
+import com.nuvio.app.core.ui.nuvioSecondaryClick
 import com.nuvio.app.core.ui.posterCardClickable
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.cloudLibraryDisplayArtworkUrl
@@ -406,6 +407,7 @@ private fun ContinueWatchingWideCard(
                 color = Color.White.copy(alpha = 0.15f),
                 shape = RoundedCornerShape(layout.cardRadius),
             )
+            .nuvioSecondaryClick(onLongClick)
             .combinedClickable(
                 enabled = onClick != null || onLongClick != null,
                 onClick = { onClick?.invoke() },
