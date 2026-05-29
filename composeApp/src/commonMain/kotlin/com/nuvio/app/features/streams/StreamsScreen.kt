@@ -94,6 +94,7 @@ import com.nuvio.app.features.debrid.DebridProviders
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
+import com.nuvio.app.isDesktop
 import kotlinx.coroutines.launch
 import kotlin.math.round
 import kotlin.math.roundToInt
@@ -280,7 +281,7 @@ fun StreamsScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
-                    .padding(top = statusBarTop)
+                    .padding(top = if (isDesktop) statusBarTop else 0.dp)
                     .padding(start = 12.dp, top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
