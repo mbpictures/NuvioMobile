@@ -552,6 +552,58 @@ abstract class FetchMacOSLibmpvTask : DefaultTask() {
     }
 }
 
+abstract class DownloadFileTask : DefaultTask() {
+    @get:Input
+    abstract val sourceUrl: Property<String>
+
+    @get:Input
+    abstract val minSize: Property<Long>
+
+    @get:OutputFile
+    abstract val targetFile: RegularFileProperty
+
+    @TaskAction
+    fun download() {
+        val target = targetFile.get().asFile
+        if (target.exists() && target.length() >= minSize.get()) return
+        target.parentFile.mkdirs()
+        logger.lifecycle("Downloading ${sourceUrl.get()}")
+        URI(sourceUrl.get()).toURL().openStream().use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        }
+        if (target.length() < minSize.get()) {
+            throw GradleException("Downloaded ${target.name} is smaller than expected (${target.length()} bytes)")
+        }
+    }
+}
+
+abstract class FetchLinuxLibmpvTask : DefaultTask() {
+    @get:InputFile
+    abstract val scriptFile: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun fetch() {
+        val out = outputDir.get().asFile
+        val script = scriptFile.get().asFile
+        val process = ProcessBuilder("bash", script.absolutePath, out.absolutePath)
+            .redirectErrorStream(true)
+            .start()
+        process.inputStream.bufferedReader().forEachLine { line ->
+            if (line.isNotBlank()) logger.lifecycle(line)
+        }
+        val exit = process.waitFor()
+        if (exit != 0) {
+            throw GradleException("fetch-linux-libmpv.sh failed (exit $exit)")
+        }
+        if (!out.resolve("libmpv.so.2").isFile) {
+            throw GradleException("libmpv.so.2 missing from $out after fetch")
+        }
+    }
+}
+
 val macOSLibmpvArchiveUrl =
     "https://github.com/media-kit/libmpv-darwin-build/releases/download/v0.7.0/libmpv-libs_v0.7.0_macos-universal-video-default.tar.gz"
 
@@ -562,11 +614,22 @@ val fetchMacOSLibmpv = tasks.register<FetchMacOSLibmpvTask>("fetchMacOSLibmpv") 
     outputDir.set(libmpvResourceRoot.map { it.dir("macos-universal") })
 }
 
+// Embed libmpv on Linux (self-contained bundle, like Windows/macOS) with
+// -Pnuvio.desktop.embedMpvLinux=true. Off by default: dev builds stay fast and the runtime uses a
+// system-installed libmpv (sudo apt install libmpv1). The embedded bundle is built from conda-forge
+// and needs a modern libstdc++ (Ubuntu 22.04+), so it is opt-in rather than forced.
+val embedMpvLinux = (providers.gradleProperty("nuvio.desktop.embedMpvLinux").orNull ?: "false").toBoolean()
+val fetchLinuxLibmpv = tasks.register<FetchLinuxLibmpvTask>("fetchLinuxLibmpv") {
+    onlyIf { org.gradle.internal.os.OperatingSystem.current().isLinux && embedMpvLinux }
+    scriptFile.set(project.file("desktop-scripts/fetch-linux-libmpv.sh"))
+    outputDir.set(libmpvResourceRoot.map { it.dir("linux-x86-64") })
+}
 kotlin {
     sourceSets {
         val desktopMain by getting {
             resources.srcDir(fetchWindowsLibmpv.map { libmpvResourceRoot.get().asFile })
             resources.srcDir(fetchMacOSLibmpv.map { libmpvResourceRoot.get().asFile })
+            resources.srcDir(fetchLinuxLibmpv.map { libmpvResourceRoot.get().asFile })
         }
     }
 }

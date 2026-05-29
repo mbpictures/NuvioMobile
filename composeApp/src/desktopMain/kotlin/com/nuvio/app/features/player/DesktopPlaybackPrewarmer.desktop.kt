@@ -10,5 +10,7 @@ internal suspend fun prewarmDesktopPlaybackBackend() {
     if (!desktopPlaybackPrewarmStarted.compareAndSet(false, true)) return
     withContext(Dispatchers.IO) {
         runCatching { LibMpv.INSTANCE }
+            .onSuccess { System.err.println("[nuvio] libmpv loaded for desktop playback") }
+            .onFailure { System.err.println("[nuvio] libmpv prewarm failed: ${it.message}") }
     }
 }

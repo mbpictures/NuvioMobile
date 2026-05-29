@@ -670,33 +670,65 @@ internal interface LibMpv : Library {
     companion object {
         val INSTANCE: LibMpv by lazy { loadLibrary() }
 
-        private val isMac: Boolean
-            get() = System.getProperty("os.name").orEmpty().lowercase().contains("mac")
+        private val osName: String
+            get() = System.getProperty("os.name").orEmpty().lowercase()
+        private val isMac: Boolean get() = osName.contains("mac")
+        private val isWindows: Boolean get() = osName.contains("win")
+        private val isLinux: Boolean get() = osName.contains("linux") || osName.contains("nux")
 
         private fun loadLibrary(): LibMpv {
             extendJnaSearchPath()
-            val candidates = if (isMac) {
-                listOf("mpv", "mpv.2", "mpv-2")
-            } else {
-                listOf("libmpv-2", "mpv-2", "mpv-1", "libmpv")
+            val errors = mutableListOf<String>()
+            // Linux: load the embedded/system library directly by absolute path FIRST. Loading by the
+            // short name "mpv" lets JNA extract a lone copy of a bundled libmpv.so to a temp dir, which
+            // breaks the $ORIGIN lookup of its sibling dependencies (libavcodec, etc.). It also picks
+            // up the versioned soname (libmpv.so.2 / .so.1) that runtime packages ship without a dev
+            // symlink.
+            if (isLinux) {
+                for (file in linuxLibmpvFiles()) {
+                    try {
+                        return Native.load(file.absolutePath, LibMpv::class.java)
+                    } catch (e: UnsatisfiedLinkError) {
+                        errors += "${file.absolutePath}: ${e.message}"
+                    }
+                }
+            }
+            val candidates = when {
+                isMac -> listOf("mpv", "mpv.2", "mpv-2")
+                isWindows -> listOf("libmpv-2", "mpv-2", "mpv-1", "libmpv")
+                else -> listOf("mpv") // resolves a system libmpv.so dev symlink, if present
             }
             for (name in candidates) {
                 try {
                     return Native.load(name, LibMpv::class.java)
-                } catch (_: UnsatisfiedLinkError) {
+                } catch (e: UnsatisfiedLinkError) {
+                    errors += "$name: ${e.message}"
                 }
             }
             throw IllegalStateException(
-                if (isMac) {
-                    "libmpv.dylib was not found. The bundled dylib should ship in resources at " +
-                        "macos-universal/libmpv.dylib. If you are running a custom build, run " +
-                        "'./gradlew :composeApp:fetchMacOSLibmpv' so the dylib is downloaded and patched."
-                } else {
-                    "libmpv-2.dll was not found. The bundled DLL should ship in resources at " +
-                        "win32-x86-64/libmpv-2.dll. If you are running a custom build, ensure mpv is " +
-                        "on PATH or place libmpv-2.dll into an 'mpv' folder next to the executable."
+                buildString {
+                    append(notFoundMessage())
+                    if (errors.isNotEmpty()) {
+                        append("\nLoad attempts:\n")
+                        append(errors.joinToString("\n"))
+                    }
                 },
             )
+        }
+
+        private fun notFoundMessage(): String = when {
+            isMac ->
+                "libmpv.dylib was not found. The bundled dylib should ship in resources at " +
+                    "macos-universal/libmpv.dylib. If you are running a custom build, run " +
+                    "'./gradlew :composeApp:fetchMacOSLibmpv' so the dylib is downloaded and patched."
+            isWindows ->
+                "libmpv-2.dll was not found. The bundled DLL should ship in resources at " +
+                    "win32-x86-64/libmpv-2.dll. If you are running a custom build, ensure mpv is " +
+                    "on PATH or place libmpv-2.dll into an 'mpv' folder next to the executable."
+            else ->
+                "libmpv was not found. Install it with your package manager, e.g. " +
+                    "'sudo apt install libmpv2' (Debian/Ubuntu; use 'libmpv1' on older releases), " +
+                    "'sudo dnf install mpv-libs' (Fedora), or 'sudo pacman -S mpv' (Arch)."
         }
 
         private fun extendJnaSearchPath() {
@@ -710,8 +742,74 @@ internal interface LibMpv : Library {
             System.setProperty("jna.library.path", combined)
         }
 
-        private fun candidateSearchDirs(): List<File> =
-            if (isMac) macSearchDirs() else windowsSearchDirs()
+        private fun candidateSearchDirs(): List<File> = when {
+            isMac -> macSearchDirs()
+            isWindows -> windowsSearchDirs()
+            else -> linuxSearchDirs()
+        }
+
+        private fun linuxSearchDirs(): List<File> {
+            val arch = System.getProperty("os.arch").orEmpty().lowercase()
+            val multiarch = if (arch.contains("aarch64") || arch.contains("arm64")) {
+                "aarch64-linux-gnu"
+            } else {
+                "x86_64-linux-gnu"
+            }
+            val userDir = System.getProperty("user.dir").orEmpty()
+            val workspaceBundles = listOfNotNull(
+                File(userDir).takeIf { it.path.isNotEmpty() },
+                File(userDir).parentFile,
+            ).flatMap { root ->
+                listOf(
+                    File(root, "composeApp/build/generated/libmpv/linux-x86-64"),
+                    File(root, "composeApp/build/processedResources/desktop/main/linux-x86-64"),
+                    File(root, "build/generated/libmpv/linux-x86-64"),
+                    File(root, "build/processedResources/desktop/main/linux-x86-64"),
+                )
+            }
+            // The bundled dir is listed first so the embedded libmpv (with its $ORIGIN-rpath'd
+            // dependency closure) is preferred over any system-installed libmpv.
+            return (listOfNotNull(linuxBundledLibmpvDir()) + workspaceBundles + listOf(
+                File("/usr/lib/$multiarch"),
+                File("/usr/lib"),
+                File("/usr/local/lib"),
+                File("/lib/$multiarch"),
+                File("/usr/lib64"),
+                File("/lib64"),
+            )).filter { it.isDirectory }
+        }
+
+        private fun linuxBundledLibmpvDir(): File? {
+            // Most reliable: the embedded bundle is on the classpath at /linux-x86-64/.
+            for (name in listOf("libmpv.so.2", "libmpv.so")) {
+                val res = LibMpv::class.java.getResource("/linux-x86-64/$name") ?: continue
+                if (res.protocol == "file") {
+                    val f = runCatching { File(res.toURI()) }.getOrNull()
+                    if (f != null && f.isFile) return f.parentFile
+                }
+            }
+            // Fallback: probe relative to this class' code source (covers dev `run` layouts).
+            val classUrl = LibMpv::class.java.protectionDomain?.codeSource?.location ?: return null
+            val classFile = runCatching { File(classUrl.toURI()) }.getOrNull() ?: return null
+            val base = if (classFile.isFile) classFile.parentFile else classFile
+            val relativeCandidates = listOf(
+                "linux-x86-64",
+                "generated/libmpv/linux-x86-64",
+                "processedResources/desktop/main/linux-x86-64",
+                "../linux-x86-64",
+            )
+            return generateSequence(base) { it.parentFile }
+                .take(8)
+                .flatMap { dir -> relativeCandidates.asSequence().map { File(dir, it) } }
+                .firstOrNull { it.isDirectory && (File(it, "libmpv.so.2").isFile || File(it, "libmpv.so").isFile) }
+        }
+
+        private fun linuxLibmpvFiles(): List<File> {
+            val names = listOf("libmpv.so.2", "libmpv.so.1", "libmpv.so")
+            return linuxSearchDirs()
+                .flatMap { dir -> names.map { File(dir, it) } }
+                .filter { it.isFile }
+        }
 
         private fun windowsSearchDirs(): List<File> {
             val home = System.getProperty("user.home").orEmpty()

@@ -63,6 +63,7 @@ private fun desktopPlaybackBackend(): DesktopPlaybackBackend {
     return when {
         osName.contains("mac") -> MacOSLibMpvPlayerBackend
         osName.contains("win") -> WindowsMpvPlayerBackend
+        osName.contains("linux") || osName.contains("nux") -> LinuxLibMpvPlayerBackend
         else -> UnsupportedDesktopPlaybackBackend(osName.ifBlank { "unknown" })
     }
 }
