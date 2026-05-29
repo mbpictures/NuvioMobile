@@ -63,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.AppIconResource
+import com.nuvio.app.core.ui.LocalWindowChromeTopInset
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.appIconPainter
 import com.nuvio.app.core.ui.nuvioTypeScale
@@ -167,6 +168,7 @@ internal fun PlayerControlsShell(
                     .align(Alignment.TopStart)
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.safeContent.only(WindowInsetsSides.Top))
+                    .padding(top = LocalWindowChromeTopInset.current)
                     .padding(
                         start = metrics.horizontalPadding,
                         end = metrics.horizontalPadding,

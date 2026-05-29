@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.core.ui.LocalWindowChromeImmersiveRequest
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.debrid.DirectDebridPlayableResult
@@ -220,6 +221,15 @@ fun PlayerScreen(
             mild = stringResource(Res.string.parental_severity_mild),
         )
         val gestureController = rememberPlayerGestureController()
+
+        // Ask a custom window chrome (the Windows title bar) to auto-hide while the player is open
+        // so the video is unobstructed; it reappears when the pointer returns to the top edge.
+        val windowChromeImmersiveRequest = LocalWindowChromeImmersiveRequest.current
+        DisposableEffect(windowChromeImmersiveRequest) {
+            windowChromeImmersiveRequest?.invoke(true)
+            onDispose { windowChromeImmersiveRequest?.invoke(false) }
+        }
+
         val fullscreenController = LocalPlayerFullscreenController.current
         if (fullscreenController != null) {
             DisposableEffect(fullscreenController) {

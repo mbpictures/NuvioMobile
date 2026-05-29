@@ -29,6 +29,15 @@ internal val LocalNuvioBottomNavigationOverlayPadding = staticCompositionLocalOf
 internal val LocalWindowChromeTopInset = staticCompositionLocalOf { 0.dp }
 
 /**
+ * Hook for a full-screen surface (the video player) to ask a custom window chrome to enter
+ * "immersive" mode — hiding its title bar until the pointer returns to the top edge, and dropping
+ * the [LocalWindowChromeTopInset] so the surface can use the full window height. `null` when there
+ * is no such chrome (mobile, or desktop platforms with a native title bar). Call with `true` on
+ * enter and `false` on dispose.
+ */
+internal val LocalWindowChromeImmersiveRequest = staticCompositionLocalOf<((Boolean) -> Unit)?> { null }
+
+/**
  * Top safe-area padding for controls anchored to the top of the window: the platform status bar
  * plus any [LocalWindowChromeTopInset] claimed by a custom window chrome.
  */

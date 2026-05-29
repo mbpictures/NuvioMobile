@@ -1,5 +1,10 @@
 package com.nuvio.app.desktop
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -24,18 +29,24 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowState
+import com.nuvio.app.core.ui.LocalWindowChromeImmersiveRequest
 import com.nuvio.app.core.ui.LocalWindowChromeTopInset
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
@@ -73,11 +84,57 @@ internal fun WindowsChrome(
 ) {
     val hazeState = rememberHazeState()
     val isMaximized = windowState.placement == WindowPlacement.Maximized
+    val density = LocalDensity.current
 
-    Box(Modifier.fillMaxSize()) {
-        // Content fills the whole window so it scrolls behind the bar; the chrome inset pushes
-        // the app's top-anchored controls below the bar.
-        CompositionLocalProvider(LocalWindowChromeTopInset provides CaptionHeight) {
+    // "Immersive" is requested by full-screen surfaces (the video player) via
+    // LocalWindowChromeImmersiveRequest: the caption bar hides and stops reserving its inset, and
+    // only slides back in while the pointer is at the top edge.
+    var immersive by remember { mutableStateOf(false) }
+    val setImmersive = remember { { value: Boolean -> immersive = value } }
+    var pointerNearTop by remember { mutableStateOf(false) }
+    val captionVisible = !immersive || pointerNearTop
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .then(
+                if (immersive) {
+                    // Observe the pointer on the way down (Initial pass) without consuming, so the
+                    // player still receives every event while we track whether it is at the top.
+                    Modifier.pointerInput(Unit) {
+                        val revealPx = with(density) { CaptionHeight.toPx() }
+                        val hidePx = with(density) { (CaptionHeight + CaptionRevealHysteresis).toPx() }
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                if (event.type == PointerEventType.Exit) {
+                                    pointerNearTop = false
+                                } else {
+                                    val y = event.changes.firstOrNull()?.position?.y
+                                    if (y != null) {
+                                        if (y <= revealPx) {
+                                            pointerNearTop = true
+                                        } else if (y > hidePx) {
+                                            pointerNearTop = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Modifier
+                },
+            ),
+    ) {
+        // Content fills the whole window so it scrolls behind the bar, while the chrome inset keeps
+        // the app's top-anchored controls below the bar's strip. The inset is reserved even while
+        // immersive (player) — the bar only *hides* there, so controls still clear the space it
+        // reclaims when it slides back in.
+        CompositionLocalProvider(
+            LocalWindowChromeTopInset provides CaptionHeight,
+            LocalWindowChromeImmersiveRequest provides setImmersive,
+        ) {
             Box(Modifier.fillMaxSize().hazeSource(state = hazeState)) {
                 content()
             }
@@ -88,20 +145,29 @@ internal fun WindowsChrome(
             ResizeHandles(window)
         }
 
-        CaptionBar(window, hazeState, Modifier.align(Alignment.TopStart))
-
-        // Drawn last so the caption buttons win their clicks over the bar's drag region beneath
-        // them.
-        WindowButtons(
-            isMaximized = isMaximized,
-            onMinimize = { windowState.isMinimized = true },
-            onToggleMaximize = {
-                windowState.placement =
-                    if (isMaximized) WindowPlacement.Floating else WindowPlacement.Maximized
-            },
-            onClose = onClose,
-            modifier = Modifier.align(Alignment.TopEnd),
-        )
+        // The caption bar and its buttons slide in/out together. When immersive they stay hidden
+        // until the pointer reaches the top edge. The buttons are last in the Box so they win
+        // their clicks over the bar's drag region beneath them.
+        AnimatedVisibility(
+            visible = captionVisible,
+            enter = slideInVertically { -it } + fadeIn(),
+            exit = slideOutVertically { -it } + fadeOut(),
+            modifier = Modifier.align(Alignment.TopStart).fillMaxWidth(),
+        ) {
+            Box(Modifier.fillMaxWidth().height(CaptionHeight)) {
+                CaptionBar(window, hazeState, Modifier.align(Alignment.TopStart))
+                WindowButtons(
+                    isMaximized = isMaximized,
+                    onMinimize = { windowState.isMinimized = true },
+                    onToggleMaximize = {
+                        windowState.placement =
+                            if (isMaximized) WindowPlacement.Floating else WindowPlacement.Maximized
+                    },
+                    onClose = onClose,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                )
+            }
+        }
     }
 }
 
@@ -263,6 +329,9 @@ private fun resizeWindow(window: ComposeWindow, edge: ResizeEdge, cursorX: Int, 
 }
 
 private val CaptionHeight = 30.dp
+// Slack below the bar before an immersive (player) reveal hides again, so the bar doesn't flicker
+// when the pointer hovers right at its bottom edge.
+private val CaptionRevealHysteresis = 16.dp
 // Translucent dark scrim laid over the caption blur. The app content scrolls behind the bar, so
 // this tints the blurred content just enough to keep the white caption icons legible over bright
 // backdrops (e.g. a light hero image) while staying see-through.
