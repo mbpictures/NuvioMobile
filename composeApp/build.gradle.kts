@@ -624,12 +624,24 @@ val fetchLinuxLibmpv = tasks.register<FetchLinuxLibmpvTask>("fetchLinuxLibmpv") 
     scriptFile.set(project.file("desktop-scripts/fetch-linux-libmpv.sh"))
     outputDir.set(libmpvResourceRoot.map { it.dir("linux-x86-64") })
 }
+
+// Bundle a color-emoji font on Linux: the app's JetBrains Sans font has no emoji glyphs and minimal
+// Linux installs ship none, so Skia's fallback finds nothing. macOS/Windows use their OS emoji font.
+val emojiFontResourceRoot = layout.buildDirectory.dir("generated/desktop-fonts")
+val fetchDesktopEmojiFont = tasks.register<DownloadFileTask>("fetchDesktopEmojiFont") {
+    onlyIf { org.gradle.internal.os.OperatingSystem.current().isLinux }
+    sourceUrl.set("https://github.com/googlefonts/noto-emoji/raw/v2.047/fonts/NotoColorEmoji.ttf")
+    minSize.set(1_000_000L)
+    targetFile.set(emojiFontResourceRoot.map { it.file("fonts/NotoColorEmoji.ttf") })
+}
+
 kotlin {
     sourceSets {
         val desktopMain by getting {
             resources.srcDir(fetchWindowsLibmpv.map { libmpvResourceRoot.get().asFile })
             resources.srcDir(fetchMacOSLibmpv.map { libmpvResourceRoot.get().asFile })
             resources.srcDir(fetchLinuxLibmpv.map { libmpvResourceRoot.get().asFile })
+            resources.srcDir(fetchDesktopEmojiFont.map { emojiFontResourceRoot.get().asFile })
         }
     }
 }

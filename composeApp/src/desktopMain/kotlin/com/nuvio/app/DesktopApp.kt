@@ -12,6 +12,7 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.nuvio.app.desktop.DesktopBackDispatcher
+import com.nuvio.app.desktop.EmojiFallbackPreloader
 import com.nuvio.app.desktop.WindowsChrome
 import com.nuvio.app.desktop.WindowsFullscreen
 import com.nuvio.app.features.player.LocalPlayerFullscreenController
@@ -59,6 +60,8 @@ fun main() {
             LaunchedEffect(Unit) {
                 prewarmDesktopPlaybackBackend()
             }
+
+            EmojiFallbackPreloader()
 
             DisposableEffect(Unit) {
                 val toolkit = Toolkit.getDefaultToolkit()
