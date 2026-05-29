@@ -2,9 +2,12 @@ package com.nuvio.app.features.player
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,12 +48,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontStyle
@@ -388,6 +393,40 @@ private fun PlayerHeader(
     }
 }
 
+/**
+ * Hover treatment shared by the player's control buttons: a white highlight that fades in over
+ * the [restingColor] plus a subtle scale-up, both driven by [interactionSource]. Pass the same
+ * source to the button's `clickable` (with the default indication) so the existing press ripple
+ * is kept and the hover state is fed from the pointer. Apply this before `clickable` and any inner
+ * padding so the highlight fills the whole button [shape].
+ */
+@Composable
+private fun Modifier.playerButtonHover(
+    interactionSource: MutableInteractionSource,
+    shape: Shape,
+    restingColor: Color = Color.Transparent,
+): Modifier {
+    val hovered by interactionSource.collectIsHoveredAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (hovered) 1.08f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "playerButtonHoverScale",
+    )
+    val highlightAlpha by animateFloatAsState(
+        targetValue = if (hovered) 0.22f else 0f,
+        animationSpec = tween(durationMillis = 120),
+        label = "playerButtonHoverHighlight",
+    )
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .clip(shape)
+        .background(restingColor)
+        .background(Color.White.copy(alpha = highlightAlpha))
+}
+
 @Composable
 private fun PlayerHeaderIconButton(
     icon: ImageVector,
@@ -396,12 +435,16 @@ private fun PlayerHeaderIconButton(
     iconSize: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .size(buttonSize)
-            .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.35f))
-            .clickable(onClick = onClick),
+            .playerButtonHover(interactionSource, CircleShape, restingColor = Color.Black.copy(alpha = 0.35f))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -455,10 +498,15 @@ private fun SideControlButton(
     metrics: PlayerLayoutMetrics,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .playerButtonHover(interactionSource, CircleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            )
             .padding(metrics.sideButtonPadding),
         contentAlignment = Alignment.Center,
     ) {
@@ -482,10 +530,15 @@ private fun PlayPauseControlButton(
         if (isPlaying) AppIconResource.PlayerPause else AppIconResource.PlayerPlay,
     )
 
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .playerButtonHover(interactionSource, CircleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            )
             .padding(metrics.playButtonPadding),
         contentAlignment = Alignment.Center,
     ) {
@@ -741,10 +794,15 @@ private fun PlayerActionPillButton(
     icon: ImageVector? = null,
     painter: Painter? = null,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(22.dp))
-            .clickable(onClick = onClick)
+            .playerButtonHover(interactionSource, RoundedCornerShape(22.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            )
             .padding(horizontal = 12.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
