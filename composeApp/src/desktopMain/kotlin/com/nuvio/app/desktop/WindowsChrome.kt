@@ -8,9 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +22,7 @@ import androidx.compose.material.icons.filled.FilterNone
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -37,18 +36,28 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowState
+import com.nuvio.app.core.ui.LocalWindowChromeTopInset
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import java.awt.Cursor
 import java.awt.MouseInfo
 
 /**
- * Wraps [content] for the undecorated Windows window so the app renders edge-to-edge while a
- * transparent title bar floats on top: a full-width drag band along the top moves the window,
- * the caption buttons sit in the top-right corner, and thin resize handles line the border.
+ * Wraps [content] for the undecorated Windows window. [content] fills the whole window and is
+ * registered as a Haze blur source, so the app's hero images and lists scroll *behind* a
+ * translucent frosted glass title bar that overlays the top [CaptionHeight]. The bar blurs and
+ * tints whatever passes under it, giving a real see-through caption.
  *
- * The drag band is rendered *in front* of [content] (so it wins over the home screen's
- * scrollable list) but leaves pass-through "holes" where the app already draws interactive
- * controls — the centered navigation pill and the top-left back button — so those keep
- * receiving clicks.
+ * So the app's own top controls don't collide with the bar, the content subtree is given a
+ * [LocalWindowChromeTopInset] of [CaptionHeight]; top-anchored controls (the navigation pill,
+ * detail headers, back buttons) add that inset and therefore sit just below the bar, while
+ * full-bleed backgrounds ignore it and keep scrolling underneath.
+ *
+ * The bar spans edge to edge with no break — dragging it moves the window everywhere except the
+ * caption buttons in the top-right corner (you don't drag a window by its buttons). Thin resize
+ * handles line the border.
  *
  * Moving and resizing are driven directly through AWT using the absolute cursor position from
  * [MouseInfo]. Both the cursor and the window bounds live in the same screen-pixel space, so
@@ -62,18 +71,27 @@ internal fun WindowsChrome(
     onClose: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    Box(Modifier.fillMaxSize()) {
-        content()
+    val hazeState = rememberHazeState()
+    val isMaximized = windowState.placement == WindowPlacement.Maximized
 
-        val isMaximized = windowState.placement == WindowPlacement.Maximized
+    Box(Modifier.fillMaxSize()) {
+        // Content fills the whole window so it scrolls behind the bar; the chrome inset pushes
+        // the app's top-anchored controls below the bar.
+        CompositionLocalProvider(LocalWindowChromeTopInset provides CaptionHeight) {
+            Box(Modifier.fillMaxSize().hazeSource(state = hazeState)) {
+                content()
+            }
+        }
 
         // A maximized window fills the monitor work area, so there is nothing to resize.
         if (!isMaximized) {
             ResizeHandles(window)
         }
 
-        TitleBarDragBand(window, Modifier.align(Alignment.TopStart))
+        CaptionBar(window, hazeState, Modifier.align(Alignment.TopStart))
 
+        // Drawn last so the caption buttons win their clicks over the bar's drag region beneath
+        // them.
         WindowButtons(
             isMaximized = isMaximized,
             onMinimize = { windowState.isMinimized = true },
@@ -88,53 +106,44 @@ internal fun WindowsChrome(
 }
 
 /**
- * The draggable top band. Built from two drag strips separated by pass-through holes: a fixed
- * hole on the left (for the back button on detail screens) and a centered hole (for the
- * navigation pill). The far-right [WindowButtonsWidth] is left empty so [WindowButtons], drawn
- * afterwards, receives the clicks there.
+ * The full-width frosted glass title bar overlaid on the top of the content. It is one continuous
+ * drag surface spanning the entire width; the caption buttons are drawn on top of its right edge
+ * afterwards, so a drag started there hits the buttons instead of moving the window.
  */
 @Composable
-private fun TitleBarDragBand(window: ComposeWindow, modifier: Modifier = Modifier) {
-    BoxWithConstraints(modifier.fillMaxWidth().height(CaptionHeight)) {
-        val totalWidth = maxWidth
-        val centerHole = (totalWidth * 0.55f).coerceIn(360.dp, 640.dp)
-        val sideWidth = ((totalWidth - centerHole) / 2f).coerceAtLeast(0.dp)
-        val leftStrip = (sideWidth - LeftHoleWidth).coerceAtLeast(0.dp)
-        val rightStrip = (sideWidth - WindowButtonsWidth).coerceAtLeast(0.dp)
-
-        Row(Modifier.fillMaxSize()) {
-            Spacer(Modifier.width(LeftHoleWidth).fillMaxHeight())
-            DragStrip(window, Modifier.width(leftStrip).fillMaxHeight())
-            Spacer(Modifier.width(centerHole).fillMaxHeight())
-            DragStrip(window, Modifier.width(rightStrip).fillMaxHeight())
-            // Remaining width (WindowButtonsWidth) intentionally left empty for the buttons.
-        }
-    }
-}
-
-@Composable
-private fun DragStrip(window: ComposeWindow, modifier: Modifier) {
+private fun CaptionBar(window: ComposeWindow, hazeState: HazeState, modifier: Modifier = Modifier) {
     Box(
-        modifier.pointerInput(Unit) {
-            // Offset between the cursor and the window origin, captured when the drag begins so
-            // the window tracks the cursor exactly (no incremental drift).
-            var grabX = 0
-            var grabY = 0
-            detectDragGestures(
-                onDragStart = {
-                    val cursor = MouseInfo.getPointerInfo()?.location ?: return@detectDragGestures
-                    grabX = cursor.x - window.x
-                    grabY = cursor.y - window.y
-                },
-                onDrag = { change, _ ->
-                    change.consume()
-                    val cursor = MouseInfo.getPointerInfo()?.location ?: return@detectDragGestures
-                    window.setLocation(cursor.x - grabX, cursor.y - grabY)
-                },
-            )
-        },
+        modifier
+            .fillMaxWidth()
+            .height(CaptionHeight)
+            .captionGlass(hazeState)
+            .pointerInput(Unit) {
+                // Offset between the cursor and the window origin, captured when the drag begins
+                // so the window tracks the cursor exactly (no incremental drift).
+                var grabX = 0
+                var grabY = 0
+                detectDragGestures(
+                    onDragStart = {
+                        val cursor = MouseInfo.getPointerInfo()?.location ?: return@detectDragGestures
+                        grabX = cursor.x - window.x
+                        grabY = cursor.y - window.y
+                    },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        val cursor = MouseInfo.getPointerInfo()?.location ?: return@detectDragGestures
+                        window.setLocation(cursor.x - grabX, cursor.y - grabY)
+                    },
+                )
+            },
     )
 }
+
+/**
+ * Frosts the caption surface: blurs whatever is rendered behind it, then lays a translucent scrim
+ * on top so the white caption icons stay legible over any backdrop.
+ */
+private fun Modifier.captionGlass(hazeState: HazeState): Modifier =
+    this.hazeEffect(state = hazeState).background(CaptionScrim)
 
 @Composable
 private fun WindowButtons(
@@ -144,7 +153,10 @@ private fun WindowButtons(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier.height(CaptionHeight), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier.height(CaptionHeight),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         CaptionButton(icon = Icons.Filled.Remove, contentDescription = "Minimize", onClick = onMinimize)
         CaptionButton(
             icon = if (isMaximized) Icons.Filled.FilterNone else Icons.Filled.CropSquare,
@@ -174,7 +186,7 @@ private fun CaptionButton(
     Box(
         modifier = Modifier
             .fillMaxHeight()
-            .width(46.dp)
+            .width(CaptionHeight)
             .background(background)
             .hoverable(interaction)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
@@ -250,11 +262,13 @@ private fun resizeWindow(window: ComposeWindow, edge: ResizeEdge, cursorX: Int, 
     window.setBounds(x, y, width, height)
 }
 
-private val CaptionHeight = 44.dp
+private val CaptionHeight = 30.dp
+// Translucent dark scrim laid over the caption blur. The app content scrolls behind the bar, so
+// this tints the blurred content just enough to keep the white caption icons legible over bright
+// backdrops (e.g. a light hero image) while staying see-through.
+private val CaptionScrim = Color.Black.copy(alpha = 0.32f)
 private val EdgeThickness = 6.dp
 private val CornerSize = 12.dp
-private val LeftHoleWidth = 80.dp
-private val WindowButtonsWidth = 138.dp // three 46.dp caption buttons
 private const val MinWidth = 480
 private const val MinHeight = 320
 
