@@ -224,20 +224,16 @@ jobs:
           donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
           donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
 
-      # The Release Kotlin/Native link (DevirtualizationAnalysis LTO) needs a
-      # large heap — ~8-12 GB — or it dies with a Java OutOfMemoryError. The
-      # standard macos-15 runner has only ~7 GB physical RAM, so give the native
-      # compiler a high -Xmx and let macOS back the overflow with swap, while
-      # keeping the Gradle/Kotlin daemons small so they don't compete for RAM
-      # during the link.
-      - name: Tune Gradle/Kotlin heaps for the CI runner
+      # The Release Kotlin/Native link of the iOS framework regularly needs
+      # 8–10 GB of heap (Compose + Ktor + Supabase). Override at the user
+      # level so we don't have to raise the project default for local devs.
+      - name: Raise Gradle heap for Kotlin/Native release link
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.gradle"
           cat >> "$HOME/.gradle/gradle.properties" <<'EOF'
-          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=1g
-          kotlin.daemon.jvmargs=-Xmx2g
-          kotlin.native.jvmArgs=-Xmx12g
+          org.gradle.jvmargs=-Xmx10g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=1g
+          kotlin.daemon.jvmargs=-Xmx4g
           EOF
           # Make sure no stale daemon is hanging around with the old args.
           ./gradlew --stop || true
@@ -588,14 +584,13 @@ jobs:
           donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
           donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
 
-      - name: Tune Gradle/Kotlin heaps for the CI runner
+      - name: Raise Gradle heap for Kotlin/Native release link
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.gradle"
           cat >> "$HOME/.gradle/gradle.properties" <<'EOF'
-          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=1g
-          kotlin.daemon.jvmargs=-Xmx2g
-          kotlin.native.jvmArgs=-Xmx12g
+          org.gradle.jvmargs=-Xmx10g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=1g
+          kotlin.daemon.jvmargs=-Xmx4g
           EOF
           ./gradlew --stop || true
 
