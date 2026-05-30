@@ -302,6 +302,7 @@
     <string name="collections_your_collections">Your Collections</string>
     <string name="compose_about_made_with">Made with ❤️ by Tapframe and friends</string>
     <string name="compose_about_version_format">Version %1$s (%2$s)</string>
+    <string name="compose_about_unofficial_fork">Unofficial fork of the Nuvio app</string>
     <string name="compose_action_off">Off</string>
     <string name="compose_action_on">On</string>
     <string name="compose_action_pause">Pause</string>
