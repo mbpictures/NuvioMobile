@@ -588,6 +588,9 @@ abstract class DownloadFileTask : DefaultTask() {
 }
 
 abstract class FetchLinuxLibmpvTask : DefaultTask() {
+    @get:Input
+    abstract val embedEnabled: Property<Boolean>
+
     @get:InputFile
     abstract val scriptFile: RegularFileProperty
 
@@ -630,7 +633,14 @@ val fetchMacOSLibmpv = tasks.register<FetchMacOSLibmpvTask>("fetchMacOSLibmpv") 
 // and needs a modern libstdc++ (Ubuntu 22.04+), so it is opt-in rather than forced.
 val embedMpvLinux = (providers.gradleProperty("nuvio.desktop.embedMpvLinux").orNull ?: "false").toBoolean()
 val fetchLinuxLibmpv = tasks.register<FetchLinuxLibmpvTask>("fetchLinuxLibmpv") {
-    onlyIf { org.gradle.internal.os.OperatingSystem.current().isLinux && embedMpvLinux }
+    embedEnabled.set(embedMpvLinux)
+    // Read the gate from the task's own input (not the script-level `embedMpvLinux` local): an onlyIf
+    // spec is stored in the configuration cache, and referencing a top-level script val from it would
+    // capture the Build_gradle script object, which is not serializable.
+    onlyIf {
+        org.gradle.internal.os.OperatingSystem.current().isLinux &&
+            (it as FetchLinuxLibmpvTask).embedEnabled.get()
+    }
     scriptFile.set(project.file("desktop-scripts/fetch-linux-libmpv.sh"))
     outputDir.set(libmpvResourceRoot.map { it.dir("linux-x86-64") })
 }
