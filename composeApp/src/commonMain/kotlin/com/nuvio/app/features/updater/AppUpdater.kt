@@ -49,6 +49,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.runBlocking
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
@@ -113,7 +114,7 @@ private val appUpdaterJson = Json {
 }
 
 private class NoChannelReleaseException : IllegalStateException(
-    "No cmp-rewrite release has been published yet.",
+    runBlocking { getString(Res.string.updates_no_channel_release) },
 )
 
 private object VersionUtils {
@@ -165,7 +166,7 @@ private object AppUpdaterRepository {
             body = "",
         )
         if (response.status !in 200..299) {
-            error("GitHub releases API error: ${response.status}")
+            error(getString(Res.string.updates_github_api_error, response.status))
         }
 
         val releases = appUpdaterJson.decodeFromString<List<GitHubReleaseDto>>(response.body)
@@ -174,10 +175,10 @@ private object AppUpdaterRepository {
 
         val tag = release.tagName?.takeIf { it.isNotBlank() }
             ?: release.name?.takeIf { it.isNotBlank() }
-            ?: error("Release has no tag or name")
+            ?: error(getString(Res.string.updates_release_missing_title))
 
         val asset = chooseBestAsset(release.assets)
-            ?: error("No installable asset found in the $releaseChannelBranch release")
+            ?: error(getString(Res.string.updates_apk_asset_missing))
 
         AppUpdate(
             tag = tag,

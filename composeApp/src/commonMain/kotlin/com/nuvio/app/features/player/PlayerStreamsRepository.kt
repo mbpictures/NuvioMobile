@@ -278,15 +278,26 @@ object PlayerStreamsRepository {
                 }
             }
 
-            fun launchDebridAvailability(group: AddonStreamGroup) {
-                if (group.addonId !in installedAddonIds || group.streams.isEmpty()) return
+            fun publishStreamGroupAfterCacheCheck(group: AddonStreamGroup) {
+                if (group.addonId !in installedAddonIds || group.streams.isEmpty()) {
+                    publishStreamGroup(presentDebridGroup(group))
+                    return
+                }
 
                 val eligibleGroupIds = setOf(group.addonId)
+                val shouldWaitForCacheCheck = LocalDebridAvailabilityService.hasPendingCacheCheck(
+                    groups = listOf(group),
+                    eligibleGroupIds = eligibleGroupIds,
+                )
+                if (!shouldWaitForCacheCheck) {
+                    publishStreamGroup(presentDebridGroup(group))
+                    return
+                }
+
                 val checkingGroup = LocalDebridAvailabilityService.markChecking(
                     groups = listOf(group),
                     eligibleGroupIds = eligibleGroupIds,
                 ).firstOrNull() ?: group
-                publishStreamGroup(checkingGroup)
 
                 val availabilityJob = launch {
                     val availabilityGroup = LocalDebridAvailabilityService.annotateCachedAvailability(
@@ -367,8 +378,7 @@ object PlayerStreamsRepository {
             }
             repeat(jobs.size) {
                 val result = completions.receive()
-                publishStreamGroup(result)
-                launchDebridAvailability(result)
+                publishStreamGroupAfterCacheCheck(result)
             }
             for (availabilityJob in debridAvailabilityJobs) {
                 availabilityJob.join()

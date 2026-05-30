@@ -1,5 +1,9 @@
 package com.nuvio.app.features.updater
 
+import kotlinx.coroutines.runBlocking
+import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.updates_not_available
+import org.jetbrains.compose.resources.getString
 import com.nuvio.app.desktop.DesktopPreferences
 import java.awt.Desktop
 import java.io.File
