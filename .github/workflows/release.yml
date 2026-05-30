@@ -224,20 +224,20 @@ jobs:
           donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
           donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
 
-      # The standard macos-15 runner has only ~7 GB RAM. The project default
-      # kotlin.native.jvmArgs=-Xmx12g lets the Kotlin/Native compiler balloon
-      # past physical RAM during the Release link, so the OS OOM-kills it (a
-      # silent SIGKILL with no Gradle error). Cap the heaps at the user level so
-      # the native compiler stays within RAM, without touching the project
-      # default that local devs (with more RAM) rely on.
-      - name: Cap Gradle/Kotlin heaps to fit the CI runner RAM
+      # The Release Kotlin/Native link (DevirtualizationAnalysis LTO) needs a
+      # large heap — ~8-12 GB — or it dies with a Java OutOfMemoryError. The
+      # standard macos-15 runner has only ~7 GB physical RAM, so give the native
+      # compiler a high -Xmx and let macOS back the overflow with swap, while
+      # keeping the Gradle/Kotlin daemons small so they don't compete for RAM
+      # during the link.
+      - name: Tune Gradle/Kotlin heaps for the CI runner
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.gradle"
           cat >> "$HOME/.gradle/gradle.properties" <<'EOF'
-          org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=1g
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=1g
           kotlin.daemon.jvmargs=-Xmx2g
-          kotlin.native.jvmArgs=-Xmx6g
+          kotlin.native.jvmArgs=-Xmx12g
           EOF
           # Make sure no stale daemon is hanging around with the old args.
           ./gradlew --stop || true
@@ -588,14 +588,14 @@ jobs:
           donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
           donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
 
-      - name: Cap Gradle/Kotlin heaps to fit the CI runner RAM
+      - name: Tune Gradle/Kotlin heaps for the CI runner
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.gradle"
           cat >> "$HOME/.gradle/gradle.properties" <<'EOF'
-          org.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=1g
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=1g
           kotlin.daemon.jvmargs=-Xmx2g
-          kotlin.native.jvmArgs=-Xmx6g
+          kotlin.native.jvmArgs=-Xmx12g
           EOF
           ./gradlew --stop || true
 
