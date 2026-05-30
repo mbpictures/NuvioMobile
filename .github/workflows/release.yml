@@ -242,6 +242,16 @@ jobs:
           # Make sure no stale daemon is hanging around with the old args.
           ./gradlew --stop || true
 
+      # Diagnostic + pre-warm: build the Kotlin/Native framework directly so its
+      # output is fully visible. Xcode buffers (and on a signal-kill, drops) the
+      # "Compile Kotlin Framework" script-phase output, which is why the archive
+      # failed silently. If this step fails, we finally see the real Gradle
+      # error; if it succeeds, the problem is in Xcode's embed/sign glue.
+      - name: Build Kotlin/Native iOS framework (verbose)
+        run: |
+          set -euo pipefail
+          ./gradlew :composeApp:linkReleaseFrameworkIosArm64 --stacktrace --info
+
       - name: Archive iOS app (Release, unsigned)
         run: |
           set -euo pipefail
