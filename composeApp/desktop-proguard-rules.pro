@@ -32,3 +32,8 @@
 -keep class coil3.network.ktor3.internal.** { *; }
 -keep class dev.whyoleg.cryptography.providers.jdk.** { *; }
 -keep class io.ktor.server.config.** { *; }
+
+# Haze references ShaderBrush.createShader (a Skiko inline-class method whose name is mangled), which
+# ProGuard can't resolve at link time and reports as a fatal unresolved-reference warning. We don't
+# shrink/optimize/obfuscate, so nothing is actually removed — suppress the false positive.
+-dontwarn dev.chrisbanes.haze.**
