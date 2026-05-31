@@ -40,6 +40,28 @@ class DebridStreamPresentationTest {
     }
 
     @Test
+    fun `blank templates preserve original stream name and description`() {
+        val stream = localTorboxStream(
+            name = "Original torrent",
+            filename = "Movie.2026.1080p.WEB-DL.H265-GRP.mkv",
+            size = 4_000_000_000,
+        ).copy(description = "Original addon details")
+
+        val formatted = DebridStreamFormatter().format(
+            stream = stream,
+            settings = DebridSettings(
+                enabled = true,
+                providerApiKeys = mapOf(DebridProviders.TORBOX_ID to "key"),
+                streamNameTemplate = "",
+                streamDescriptionTemplate = "",
+            ),
+        )
+
+        assertEquals("Original torrent", formatted.name)
+        assertEquals("Original addon details", formatted.description)
+    }
+
+    @Test
     fun `formats imported badge matches from fusion badge rules`() {
         val stream = localTorboxStream(
             filename = "Movie.2024.2160p.BluRay.REMUX.TrueHD.7.1-GRP.mkv",
@@ -209,6 +231,79 @@ class DebridStreamPresentationTest {
         assertFalse(name.contains("torrent", ignoreCase = true))
         assertFalse(name.contains("Torrentio", ignoreCase = true))
         assertFalse(name.contains("Comet", ignoreCase = true))
+    }
+
+    @Test
+    fun `preserves original addon order by default`() {
+        val low = localTorboxStream(
+            name = "Low",
+            filename = "Movie.720p.BluRay.x264-GRP.mkv",
+            size = 4_000_000_000,
+        )
+        val large = localTorboxStream(
+            name = "Large",
+            filename = "Movie.2160p.BluRay.REMUX.HEVC-GRP.mkv",
+            size = 40_000_000_000,
+        )
+        val mid = localTorboxStream(
+            name = "Mid",
+            filename = "Movie.1080p.WEB-DL.HEVC-GRP.mkv",
+            size = 10_000_000_000,
+        )
+
+        val presented = DebridStreamPresentation.apply(
+            groups = listOf(
+                AddonStreamGroup(
+                    addonName = "Addon",
+                    addonId = "addon:test",
+                    streams = listOf(low, large, mid),
+                ),
+            ),
+            settings = DebridSettings(
+                enabled = true,
+                providerApiKeys = mapOf(DebridProviders.TORBOX_ID to "key"),
+            ),
+        ).single().streams
+
+        assertEquals(listOf("720p TB Instant", "2160p TB Instant", "1080p TB Instant"), presented.map { it.name })
+    }
+
+    @Test
+    fun `sorts by best quality when quality criteria are selected`() {
+        val low = localTorboxStream(
+            name = "Low",
+            filename = "Movie.720p.BluRay.x264-GRP.mkv",
+            size = 4_000_000_000,
+        )
+        val large = localTorboxStream(
+            name = "Large",
+            filename = "Movie.2160p.BluRay.REMUX.HEVC-GRP.mkv",
+            size = 40_000_000_000,
+        )
+        val mid = localTorboxStream(
+            name = "Mid",
+            filename = "Movie.1080p.WEB-DL.HEVC-GRP.mkv",
+            size = 10_000_000_000,
+        )
+
+        val presented = DebridStreamPresentation.apply(
+            groups = listOf(
+                AddonStreamGroup(
+                    addonName = "Addon",
+                    addonId = "addon:test",
+                    streams = listOf(low, large, mid),
+                ),
+            ),
+            settings = DebridSettings(
+                enabled = true,
+                providerApiKeys = mapOf(DebridProviders.TORBOX_ID to "key"),
+                streamPreferences = DebridStreamPreferences(
+                    sortCriteria = DebridStreamSortCriterion.defaultOrder,
+                ),
+            ),
+        ).single().streams
+
+        assertEquals(listOf("2160p TB Instant", "1080p TB Instant", "720p TB Instant"), presented.map { it.name })
     }
 
     @Test

@@ -1795,4 +1795,7 @@
     <!-- Pass 4 — platform stubs and dynamic title fallbacks -->
     <string name="collections_editor_trakt_list_title_format">Trakt List %1$s</string>
     <string name="external_player_android_system">Android system player</string>
+    <string name="settings_debrid_sort_best_quality">Best quality first</string>
+    <string name="settings_debrid_sort_original">Original order</string>
+    <string name="settings_debrid_template_original_format">Original format</string>
 </resources>
