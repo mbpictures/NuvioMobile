@@ -133,7 +133,14 @@ object WatchProgressRepository {
                 delay(NUVIO_SYNC_PERIODIC_INTERVAL_MS)
                 TraktAuthRepository.ensureLoaded()
                 TraktSettingsRepository.ensureLoaded()
-                if (shouldUseTraktProgress()) continue
+                if (shouldUseTraktProgress()) {
+                    runCatching { TraktProgressRepository.refreshNow() }
+                        .onFailure { error ->
+                            if (error is CancellationException) throw error
+                            log.w { "Periodic Trakt progress refresh failed: ${error.message}" }
+                        }
+                    continue
+                }
 
                 val authState = AuthRepository.state.value
                 if (authState !is AuthState.Authenticated || authState.isAnonymous) continue
@@ -419,17 +426,19 @@ object WatchProgressRepository {
     fun upsertPlaybackProgress(
         session: WatchProgressPlaybackSession,
         snapshot: PlayerPlaybackSnapshot,
+        syncRemote: Boolean = true,
     ) {
         ensureLoaded()
-        upsert(session = session, snapshot = snapshot, persist = true)
+        upsert(session = session, snapshot = snapshot, persist = true, syncRemote = syncRemote)
     }
 
     fun flushPlaybackProgress(
         session: WatchProgressPlaybackSession,
         snapshot: PlayerPlaybackSnapshot,
+        syncRemote: Boolean = true,
     ) {
         ensureLoaded()
-        upsert(session = session, snapshot = snapshot, persist = true)
+        upsert(session = session, snapshot = snapshot, persist = true, syncRemote = syncRemote)
     }
 
     fun clearProgress(videoId: String) {
@@ -561,6 +570,7 @@ object WatchProgressRepository {
         session: WatchProgressPlaybackSession,
         snapshot: PlayerPlaybackSnapshot,
         persist: Boolean,
+        syncRemote: Boolean,
     ) {
         val positionMs = snapshot.positionMs.coerceAtLeast(0L)
         val durationMs = snapshot.durationMs.coerceAtLeast(0L)
@@ -613,9 +623,11 @@ object WatchProgressRepository {
         if (entry.poster.isNullOrBlank() || entry.background.isNullOrBlank()) {
             resolveRemoteMetadata()
         }
-        pushScrobbleToServer(entry)
+        if (syncRemote) {
+            pushScrobbleToServer(entry)
+        }
         if (shouldCascadeCompletedProgressToWatchedHistory(entry, useTraktProgress)) {
-            WatchingActions.onProgressEntryUpdated(entry)
+            WatchingActions.onProgressEntryUpdated(entry, syncRemote = syncRemote)
         }
     }
 
