@@ -49,7 +49,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -591,14 +593,20 @@ private fun ProgressControls(
     val audioPainter = appIconPainter(AppIconResource.PlayerAudioFilled)
 
     Column(modifier = modifier) {
+        var pendingScrubValue by remember { mutableStateOf(displayedPositionMs.toFloat()) }
         Slider(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(metrics.sliderTouchHeight)
                 .graphicsLayer(scaleY = metrics.sliderScaleY),
             value = displayedPositionMs.coerceIn(0L, durationMs).toFloat(),
-            onValueChange = { value -> onScrubChange(value.toLong()) },
-            onValueChangeFinished = { onScrubFinished(displayedPositionMs.coerceIn(0L, durationMs)) },
+            onValueChange = { value ->
+                pendingScrubValue = value
+                onScrubChange(value.toLong())
+            },
+            onValueChangeFinished = {
+                onScrubFinished(pendingScrubValue.toLong().coerceIn(0L, durationMs))
+            },
             valueRange = 0f..durationMs.toFloat(),
         )
         Row(
