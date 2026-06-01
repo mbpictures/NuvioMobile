@@ -209,6 +209,7 @@ internal class MpvSession(
             mpv.mpv_set_option_string(handle, "terminal", "no")
             mpv.mpv_set_option_string(handle, "audio-client-name", "Nuvio")
             mpv.mpv_set_option_string(handle, "user-agent", options.userAgent)
+            mpv.mpv_set_option_string(handle, "demuxer-max-back-bytes", "256MiB")
 
             val rc = mpv.mpv_initialize(handle)
             if (rc < 0) throw IllegalStateException("mpv_initialize failed: ${errorText(rc)}")

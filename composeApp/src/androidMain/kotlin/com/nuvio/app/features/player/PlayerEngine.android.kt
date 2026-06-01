@@ -196,6 +196,7 @@ actual fun PlatformPlayerSurface(
                 DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
                 5_000
             )
+            .setBackBuffer(30_000, true)
             .build()
 
         val player = if (useLibass) {
