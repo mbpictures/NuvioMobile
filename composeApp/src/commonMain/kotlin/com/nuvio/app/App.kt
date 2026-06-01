@@ -1176,7 +1176,7 @@ private fun MainAppContent(
                 else -> playerSettingsUiState.externalPlayerEnabled
             }
             if (useExternal) {
-                openExternalPlayback(playerLaunch)
+                coroutineScope.launch { openExternalPlayback(playerLaunch) }
                 return
             }
             val launchId = PlayerLaunchStore.put(playerLaunch)
