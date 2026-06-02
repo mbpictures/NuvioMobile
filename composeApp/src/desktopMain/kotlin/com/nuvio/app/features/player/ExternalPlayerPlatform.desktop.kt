@@ -9,4 +9,9 @@ internal actual object ExternalPlayerPlatform {
         request: ExternalPlayerPlaybackRequest,
         playerId: String?,
     ): ExternalPlayerOpenResult = ExternalPlayerOpenResult.NoPlayerAvailable
+
+    actual fun buildIntent(
+        request: ExternalPlayerPlaybackRequest,
+        playerId: String?,
+    ): ExternalPlayerIntentResult = ExternalPlayerIntentResult.NotConfigured
 }

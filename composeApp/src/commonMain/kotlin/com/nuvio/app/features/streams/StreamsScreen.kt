@@ -420,6 +420,10 @@ private fun StreamListNonLazy(
     val hasGroups = filteredGroups.isNotEmpty()
     val hasAnyStreams = filteredGroups.any { it.streams.isNotEmpty() }
     val anyLoading = filteredGroups.any { it.isLoading }
+    val streamBadgeSettings by remember {
+        StreamBadgeSettingsRepository.ensureLoaded()
+        StreamBadgeSettingsRepository.uiState
+    }.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier
@@ -462,6 +466,7 @@ private fun StreamListNonLazy(
                                 stream = stream,
                                 enabled = stream.isSelectableForPlayback(debridEnabled),
                                 appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+                                showFileSizeBadges = streamBadgeSettings.showFileSizeBadges,
                                 onClick = {
                                     if (stream.isSelectableForPlayback(debridEnabled)) {
                                         onStreamSelected(stream, resumePositionMs, resumeProgressFraction)

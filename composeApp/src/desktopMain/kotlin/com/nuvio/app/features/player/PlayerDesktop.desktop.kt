@@ -31,6 +31,7 @@ internal actual object PlayerSettingsStorage {
     private const val holdToSpeedEnabledKey = "hold_to_speed_enabled"
     private const val holdToSpeedValueKey = "hold_to_speed_value"
     private const val externalPlayerEnabledKey = "external_player_enabled"
+    private const val externalPlayerForwardSubtitlesKey = "external_player_forward_subtitles"
     private const val externalPlayerIdKey = "external_player_id"
     private const val preferredAudioLanguageKey = "preferred_audio_language"
     private const val secondaryPreferredAudioLanguageKey = "secondary_preferred_audio_language"
@@ -91,6 +92,7 @@ internal actual object PlayerSettingsStorage {
         holdToSpeedEnabledKey,
         holdToSpeedValueKey,
         externalPlayerEnabledKey,
+        externalPlayerForwardSubtitlesKey,
         externalPlayerIdKey,
         preferredAudioLanguageKey,
         secondaryPreferredAudioLanguageKey,
@@ -175,6 +177,12 @@ internal actual object PlayerSettingsStorage {
 
     actual fun saveExternalPlayerEnabled(enabled: Boolean) {
         saveBoolean(externalPlayerEnabledKey, enabled)
+    }
+
+    actual fun loadExternalPlayerForwardSubtitles(): Boolean? = loadBoolean(externalPlayerForwardSubtitlesKey)
+
+    actual fun saveExternalPlayerForwardSubtitles(enabled: Boolean) {
+        saveBoolean(externalPlayerForwardSubtitlesKey, enabled)
     }
 
     actual fun loadExternalPlayerId(): String? = loadString(externalPlayerIdKey)

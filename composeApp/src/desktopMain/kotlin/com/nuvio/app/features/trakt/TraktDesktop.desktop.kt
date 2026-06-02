@@ -74,4 +74,6 @@ internal actual object TraktPlatformClock {
     actual fun parseIsoDateTimeToEpochMs(value: String): Long? = runCatching {
         Instant.parse(value).toEpochMilli()
     }.getOrNull()
+
+    actual fun availableProcessors(): Int = Runtime.getRuntime().availableProcessors()
 }
