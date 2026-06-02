@@ -286,11 +286,14 @@ kotlin {
             kotlin.srcDir(generatedRuntimeConfigDir)
         }
         val desktopMain by getting {
+            kotlin.srcDir(fullCommonSourceDir)
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.ktor.client.java)
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.jna)
+                implementation(libs.quickjs.kt)
+                implementation(libs.ksoup)
             }
         }
         androidMain.dependencies {
