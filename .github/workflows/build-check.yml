@@ -18,11 +18,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout
+      # Bootstrap checkout of the base branch — only to load the trusted local
+      # composite action below before we can reference ./.github/actions/*.
+      - name: Checkout base for local actions
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 1
+          submodules: false
+
+      # Compile the real merge of PR head into the current base tip (not
+      # GitHub's precomputed, possibly-stale refs/pull/N/merge).
+      - name: Checkout PR merged into base
+        uses: ./.github/actions/checkout-pr-merge
+        with:
+          base-ref: ${{ github.event.pull_request.base.ref }}
+          pr-number: ${{ github.event.pull_request.number }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -46,11 +58,23 @@ jobs:
     env:
       NUVIO_IOS_DISTRIBUTION: full
     steps:
-      - name: Checkout
+      # Bootstrap checkout of the base branch — only to load the trusted local
+      # composite action below before we can reference ./.github/actions/*.
+      - name: Checkout base for local actions
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 1
+          submodules: false
+
+      # Compile the real merge of PR head into the current base tip (not
+      # GitHub's precomputed, possibly-stale refs/pull/N/merge).
+      - name: Checkout PR merged into base
+        uses: ./.github/actions/checkout-pr-merge
+        with:
+          base-ref: ${{ github.event.pull_request.base.ref }}
+          pr-number: ${{ github.event.pull_request.number }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

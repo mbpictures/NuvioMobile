@@ -1,0 +1,78 @@
+name: Checkout PR merged into base
+description: >
+  Check out the result of merging the PR head into the CURRENT tip of the base
+  branch, so build checks compile exactly what the base branch would look like
+  with the PR applied.
+
+  Why not the default pull_request checkout? That checks out GitHub's
+  precomputed refs/pull/N/merge, which (a) is produced by a background job that
+  can lag the triggering event — so a checkout may grab the previous merge of an
+  old head, and (b) reflects whatever base tip was current when GitHub last
+  recomputed it, not today's base. Both yield a "phantom" tree that never
+  existed and never will, causing compile errors that don't reproduce against
+  the real base + PR. This action merges live from explicit SHAs instead, and a
+  merge conflict fails the job rather than silently testing a bogus tree.
+
+inputs:
+  base-ref:
+    description: Base branch the PR targets (github.event.pull_request.base.ref).
+    required: true
+  pr-number:
+    description: PR number (github.event.pull_request.number). Used to fetch refs/pull/N/head, which exists on the base repo for fork PRs too.
+    required: true
+  head-sha:
+    description: PR head commit SHA at event time (github.event.pull_request.head.sha). Used to detect a head that moved mid-run.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Check out the CURRENT base tip with full history so the PR head's merge
+    # base is reachable for a real merge. Submodules are deferred until after
+    # the merge so their pointers reflect the merged tree, not base alone.
+    - name: Checkout base branch tip
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.base-ref }}
+        fetch-depth: 0
+        submodules: false
+
+    - name: Merge PR head into base
+      shell: bash
+      env:
+        BASE_REF: ${{ inputs.base-ref }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        EVENT_HEAD_SHA: ${{ inputs.head-sha }}
+      run: |
+        set -euo pipefail
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        echo "Base '${BASE_REF}' tip: $(git rev-parse HEAD)"
+
+        # refs/pull/N/head is published on the BASE repo for same-repo and fork
+        # PRs alike, so this resolves the head without needing fork access.
+        git fetch --no-tags origin "refs/pull/${PR_NUMBER}/head"
+        head="$(git rev-parse FETCH_HEAD)"
+        if [[ "${head}" != "${EVENT_HEAD_SHA}" ]]; then
+          echo "::warning::PR head moved since the event (event ${EVENT_HEAD_SHA}, now ${head}); merging the current head."
+        fi
+        echo "PR head: ${head}"
+
+        # Conflicts abort with a non-zero status and fail the job — we must not
+        # compile a tree that doesn't represent a clean base + PR merge.
+        if ! git merge --no-ff --no-edit "${head}"; then
+          echo "::error::PR #${PR_NUMBER} does not cleanly merge into the current '${BASE_REF}'. The build check cannot represent the merged state until the conflict is resolved."
+          git merge --abort || true
+          exit 1
+        fi
+        echo "Merged tree: $(git rev-parse HEAD)"
+
+    # Now that the working tree is base + PR, sync submodules to the merged
+    # gitlinks (recursive, matching the previous checkout behavior).
+    - name: Initialize submodules for merged tree
+      shell: bash
+      run: |
+        set -euo pipefail
+        git submodule sync --recursive
+        git submodule update --init --recursive
