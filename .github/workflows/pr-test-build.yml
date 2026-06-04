@@ -10,7 +10,7 @@ name: PR test build
 #      but cannot exfiltrate secrets.
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened]
   issue_comment:
     types: [created]
@@ -22,7 +22,7 @@ permissions:
 jobs:
   greet:
     name: Greet new PR
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
       - name: Post greeting comment
