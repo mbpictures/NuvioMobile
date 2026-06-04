@@ -28,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +54,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.LocalWindowChromeImmersiveRequest
 import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.features.player.cast.CastConnectionState
+import com.nuvio.app.features.player.cast.CastDevicePicker
+import com.nuvio.app.features.player.cast.CastMediaRequest
+import com.nuvio.app.features.player.cast.rememberCastController
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.debrid.DirectDebridPlayableResult
 import com.nuvio.app.features.debrid.DirectDebridPlaybackResolver
@@ -308,6 +313,56 @@ fun PlayerScreen(
         var playbackSnapshot by remember { mutableStateOf(PlayerPlaybackSnapshot()) }
         var playerController by remember { mutableStateOf<PlayerEngineController?>(null) }
         var playerControllerSourceUrl by remember { mutableStateOf<String?>(null) }
+        val castController = rememberCastController()
+        var showCastPicker by remember { mutableStateOf(false) }
+        val isCasting = castController?.isCasting == true
+
+        // When a receiver connects, hand it the current stream at the local position and pause locally
+        // so playback doesn't run in two places at once.
+        LaunchedEffect(castController) {
+            val cast = castController ?: return@LaunchedEffect
+            snapshotFlow { cast.connectionState to cast.isCasting }
+                .collect { (state, casting) ->
+                    if (state == CastConnectionState.Connected && !casting) {
+                        cast.loadMedia(
+                            CastMediaRequest(
+                                url = activeSourceUrl,
+                                title = title,
+                                subtitle = activeStreamTitle,
+                                posterUrl = poster ?: background,
+                                headers = activeSourceHeaders,
+                                startPositionMs = playbackSnapshot.positionMs.coerceAtLeast(0L),
+                            ),
+                        )
+                        shouldPlay = false
+                        playerController?.pause()
+                    }
+                }
+        }
+
+        // While casting, mirror the receiver's progress into the local controls; when casting stops,
+        // resume local playback from where the TV left off.
+        LaunchedEffect(castController) {
+            val cast = castController ?: return@LaunchedEffect
+            var previouslyCasting = false
+            snapshotFlow { cast.isCasting to cast.playbackSnapshot }
+                .collect { (casting, snap) ->
+                    if (casting) {
+                        playbackSnapshot = playbackSnapshot.copy(
+                            isPlaying = snap.isPlaying,
+                            isLoading = snap.isBuffering,
+                            positionMs = snap.positionMs,
+                            durationMs = if (snap.durationMs > 0L) snap.durationMs else playbackSnapshot.durationMs,
+                        )
+                    } else if (previouslyCasting) {
+                        val resumeMs = playbackSnapshot.positionMs.coerceAtLeast(0L)
+                        playerController?.seekTo(resumeMs)
+                        shouldPlay = true
+                        playerController?.play()
+                    }
+                    previouslyCasting = casting
+                }
+        }
         var errorMessage by remember { mutableStateOf<String?>(null) }
         val keepScreenAwake = errorMessage == null &&
             (playbackSnapshot.isPlaying || (shouldPlay && playbackSnapshot.isLoading))
@@ -1045,6 +1100,12 @@ fun PlayerScreen(
         }
 
         fun togglePlayback() {
+            val cast = castController
+            if (cast != null && cast.isCasting) {
+                if (cast.playbackSnapshot.isPlaying) cast.pause() else cast.play()
+                controlsVisible = true
+                return
+            }
             if (playbackSnapshot.isPlaying) {
                 shouldPlay = false
                 playerController?.pause()
@@ -1059,8 +1120,14 @@ fun PlayerScreen(
         }
 
         fun seekBy(offsetMs: Long) {
-            playerController?.seekBy(offsetMs)
-            scheduleProgressSyncAfterSeek()
+            val cast = castController
+            if (cast != null && cast.isCasting) {
+                val target = (cast.playbackSnapshot.positionMs + offsetMs).coerceAtLeast(0L)
+                cast.seekTo(target)
+            } else {
+                playerController?.seekBy(offsetMs)
+                scheduleProgressSyncAfterSeek()
+            }
             controlsVisible = true
             when {
                 offsetMs > 0L -> showSeekFeedback(PlayerSeekDirection.Forward, offsetMs)
@@ -2597,13 +2664,16 @@ fun PlayerScreen(
                         playerControllerSourceUrl = activeSourceUrl
                     },
                     onSnapshot = { snapshot ->
-                        playbackSnapshot = snapshot
-                        if (!snapshot.isLoading) {
-                            initialLoadCompleted = true
-                        }
-                        if (snapshot.isEnded) {
-                            shouldPlay = false
-                            controlsVisible = !playerControlsLocked
+                        // While casting, the receiver is the source of truth (mirrored separately).
+                        if (castController?.isCasting != true) {
+                            playbackSnapshot = snapshot
+                            if (!snapshot.isLoading) {
+                                initialLoadCompleted = true
+                            }
+                            if (snapshot.isEnded) {
+                                shouldPlay = false
+                                controlsVisible = !playerControlsLocked
+                            }
                         }
                     },
                     onError = { message ->
@@ -2733,6 +2803,12 @@ fun PlayerScreen(
                         }
                     } else null,
                     onSubmitIntroClick = if (isSeries && playerSettingsUiState.introSubmitEnabled && playerSettingsUiState.introDbApiKey.isNotBlank()) { { showSubmitIntroModal = true } } else null,
+                    onCastClick = if (castController != null) {
+                        { showCastPicker = true }
+                    } else {
+                        null
+                    },
+                    isCasting = isCasting,
                     onFullscreenClick = fullscreenController?.let { ctrl -> { ctrl.toggle() } },
                     isFullscreen = fullscreenController?.isFullscreen == true,
                     parentalWarnings = parentalWarnings,
@@ -2745,11 +2821,22 @@ fun PlayerScreen(
                     onScrubFinished = { positionMs ->
                         isScrubbingTimeline = false
                         scrubbingPositionMs = null
-                        playerController?.seekTo(positionMs)
-                        scheduleProgressSyncAfterSeek()
+                        if (castController != null && castController.isCasting) {
+                            castController.seekTo(positionMs)
+                        } else {
+                            playerController?.seekTo(positionMs)
+                            scheduleProgressSyncAfterSeek()
+                        }
                     },
                     horizontalSafePadding = horizontalSafePadding,
                     modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            if (showCastPicker && castController != null) {
+                CastDevicePicker(
+                    controller = castController,
+                    onDismiss = { showCastPicker = false },
                 )
             }
 
