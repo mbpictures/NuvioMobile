@@ -7,6 +7,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
@@ -23,6 +25,7 @@ import java.awt.Color as AwtColor
 import java.awt.Toolkit
 import java.awt.event.AWTEventListener
 import java.awt.event.MouseEvent
+import javax.imageio.ImageIO
 
 private val DesktopWindowBackground = AwtColor(0x0D, 0x0D, 0x0D)
 
@@ -44,10 +47,17 @@ fun main() {
     System.setProperty("compose.interop.blending", "true")
     application {
         val windowState = rememberWindowState()
+        val appIcon = remember {
+            val stream = checkNotNull(
+                Thread.currentThread().contextClassLoader?.getResourceAsStream("icons/nuvio.png"),
+            ) { "Missing desktop window icon resource: icons/nuvio.png" }
+            BitmapPainter(stream.use(ImageIO::read).toComposeImageBitmap())
+        }
         Window(
             onCloseRequest = ::exitApplication,
             state = windowState,
             title = "Nuvio",
+            icon = appIcon,
             undecorated = isWindows,
         ) {
             DisposableEffect(window) {
