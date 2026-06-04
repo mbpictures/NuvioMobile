@@ -373,6 +373,7 @@
     <string name="compose_search_empty_no_search_catalogs_title">Aranabilir katalog yok</string>
     <string name="compose_search_placeholder">Film, dizi ara...</string>
     <string name="compose_search_recent_searches">Son aramalar</string>
+    <string name="compose_search_clear_recent_searches">Son aramaları temizle</string>
     <string name="compose_search_remove_recent_search">Son aramayı kaldır</string>
     <string name="compose_settings_category_about">Hakkında</string>
     <string name="compose_settings_category_general">Genel</string>
