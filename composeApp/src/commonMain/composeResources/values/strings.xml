@@ -1523,6 +1523,14 @@
     <!-- PlayerControls a11y -->
     <string name="player_action_submit_intro">Submit Intro</string>
     <string name="player_action_video_settings">Video settings</string>
+    <string name="player_action_cast">Cast to TV</string>
+    <!-- Cast device picker -->
+    <string name="cast_picker_title">Cast to</string>
+    <string name="cast_picker_searching">Searching for devices…</string>
+    <string name="cast_picker_no_devices">No devices found. Make sure your TV is on the same Wi-Fi network.</string>
+    <string name="cast_picker_disconnect">Stop casting</string>
+    <string name="cast_status_connecting">Connecting…</string>
+    <string name="cast_status_casting_to">Casting to %1$s</string>
     <!-- CloudLibrary -->
     <string name="cloud_library_provider_unavailable">Cloud library is not available for %1$s.</string>
     <!-- Player iOS video settings modal -->
