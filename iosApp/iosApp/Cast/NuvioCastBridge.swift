@@ -111,7 +111,7 @@ final class NuvioCastBridgeImpl: NSObject, NuvioCastBridge {
     }
 
     func getConnectedDeviceName() -> String {
-        sessionManager.currentCastSession?.device?.friendlyName ?? ""
+        sessionManager.currentCastSession?.device.friendlyName ?? ""
     }
 
     func loadMedia(
