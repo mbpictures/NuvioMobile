@@ -78,6 +78,23 @@ interface NuvioCastBridgeCreator {
     fun createBridge(): NuvioCastBridge
 }
 
+/**
+ * Separate registry for the DLNA/UPnP bridge. The DLNA Swift implementation conforms to the same
+ * [NuvioCastBridge] shape (discovery + AVTransport control map cleanly onto it), so it reuses
+ * [NuvioCastBridgeCreator]; only the factory is distinct so Cast and DLNA register independently.
+ */
+object NuvioDlnaBridgeFactory {
+    private var factoryRef: NuvioCastBridgeCreator? = null
+
+    fun registerFactory(creator: NuvioCastBridgeCreator) {
+        this.factoryRef = creator
+    }
+
+    fun create(): NuvioCastBridge? = factoryRef?.createBridge()
+
+    val isRegistered: Boolean get() = factoryRef != null
+}
+
 private class IosCastController(private val bridge: NuvioCastBridge) : CastController {
 
     override var connectionState by mutableStateOf(mapState(bridge.getConnectionState()))
@@ -177,9 +194,103 @@ private class IosCastController(private val bridge: NuvioCastBridge) : CastContr
     }
 }
 
+/** DLNA device ids are namespaced so the combined controller can route control calls by backend. */
+private const val DLNA_ID_PREFIX = "dlna::"
+
+/**
+ * Merges the Google Cast and DLNA backends behind one [CastController] so both appear in a single
+ * picker, mirroring the Android `CombinedAndroidCastController`. DLNA device ids carry [DLNA_ID_PREFIX].
+ */
+private class CombinedIosCastController(
+    private val cast: IosCastController?,
+    private val dlna: IosCastController?,
+) : CastController {
+
+    override val connectionState: CastConnectionState
+        get() {
+            val c = cast?.connectionState ?: CastConnectionState.Unavailable
+            val d = dlna?.connectionState ?: CastConnectionState.Unavailable
+            return when {
+                c == CastConnectionState.Connected || d == CastConnectionState.Connected -> CastConnectionState.Connected
+                c == CastConnectionState.Connecting || d == CastConnectionState.Connecting -> CastConnectionState.Connecting
+                c == CastConnectionState.NotConnected || d == CastConnectionState.NotConnected -> CastConnectionState.NotConnected
+                else -> CastConnectionState.Unavailable
+            }
+        }
+
+    override val devices: List<CastDevice>
+        get() = (cast?.devices ?: emptyList()) + (dlna?.devices ?: emptyList())
+
+    override val connectedDeviceName: String?
+        get() = cast?.connectedDeviceName ?: dlna?.connectedDeviceName
+
+    override val isCasting: Boolean
+        get() = cast?.isCasting == true || dlna?.isCasting == true
+
+    override val playbackSnapshot: CastPlaybackSnapshot
+        get() = when {
+            dlna?.isCasting == true -> dlna.playbackSnapshot
+            cast?.isCasting == true -> cast.playbackSnapshot
+            else -> CastPlaybackSnapshot()
+        }
+
+    private val dlnaActive: Boolean
+        get() = dlna != null &&
+            (dlna.connectionState == CastConnectionState.Connected || dlna.isCasting)
+
+    fun attach() {
+        cast?.attach()
+        dlna?.attach()
+    }
+
+    fun detach() {
+        cast?.detach()
+        dlna?.detach()
+    }
+
+    override fun startDiscovery() {
+        cast?.startDiscovery()
+        dlna?.startDiscovery()
+    }
+
+    override fun stopDiscovery() {
+        cast?.stopDiscovery()
+        dlna?.stopDiscovery()
+    }
+
+    override fun connect(device: CastDevice) {
+        if (device.id.startsWith(DLNA_ID_PREFIX)) dlna?.connect(device) else cast?.connect(device)
+    }
+
+    override fun disconnect() {
+        dlna?.disconnect()
+        cast?.disconnect()
+    }
+
+    override fun loadMedia(request: CastMediaRequest) {
+        if (dlnaActive) dlna?.loadMedia(request) else cast?.loadMedia(request)
+    }
+
+    override fun play() {
+        if (dlnaActive) dlna?.play() else cast?.play()
+    }
+
+    override fun pause() {
+        if (dlnaActive) dlna?.pause() else cast?.pause()
+    }
+
+    override fun seekTo(positionMs: Long) {
+        if (dlnaActive) dlna?.seekTo(positionMs) else cast?.seekTo(positionMs)
+    }
+}
+
 @Composable
 actual fun rememberCastController(): CastController? {
-    val controller = remember { NuvioCastBridgeFactory.create()?.let(::IosCastController) }
+    val controller = remember {
+        val cast = NuvioCastBridgeFactory.create()?.let(::IosCastController)
+        val dlna = NuvioDlnaBridgeFactory.create()?.let(::IosCastController)
+        if (cast == null && dlna == null) null else CombinedIosCastController(cast, dlna)
+    }
     if (controller != null) {
         DisposableEffect(controller) {
             controller.attach()
