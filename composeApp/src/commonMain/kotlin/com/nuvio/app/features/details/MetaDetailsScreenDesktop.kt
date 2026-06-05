@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +44,7 @@ import com.nuvio.app.features.details.components.DetailHero
 import com.nuvio.app.features.details.components.DetailMetaInfo
 import com.nuvio.app.features.details.components.DetailPosterRailSection
 import com.nuvio.app.features.details.components.DetailProductionSection
+import com.nuvio.app.features.details.components.DetailSecondaryAction
 import com.nuvio.app.features.details.components.DetailSeriesContent
 import com.nuvio.app.features.details.components.DetailTrailersSection
 import com.nuvio.app.features.home.MetaPreview
@@ -274,17 +278,22 @@ internal fun MetaDetailsScreenDesktop(
                             verticalArrangement = Arrangement.spacedBy(24.dp),
                         ) {
                             DetailActionButtons(
-                                saveLabel = if (isSaved) {
-                                    stringResource(Res.string.action_saved)
-                                } else {
-                                    stringResource(Res.string.action_save)
-                                },
-                                isSaved = isSaved,
+                                secondaryActions = listOf(
+                                    DetailSecondaryAction(
+                                        label = if (isSaved) {
+                                            stringResource(Res.string.action_saved)
+                                        } else {
+                                            stringResource(Res.string.action_save)
+                                        },
+                                        icon = if (isSaved) Icons.Default.Check else Icons.Default.Add,
+                                        isActive = isSaved,
+                                        onClick = {
+                                            LibraryRepository.toggleSaved(meta.toLibraryItem(savedAtEpochMs = 0L))
+                                        },
+                                    ),
+                                ),
                                 isTablet = true,
                                 showPlayButton = false,
-                                onSaveClick = {
-                                    LibraryRepository.toggleSaved(meta.toLibraryItem(savedAtEpochMs = 0L))
-                                },
                             )
 
                             DetailMetaInfo(meta = meta)
