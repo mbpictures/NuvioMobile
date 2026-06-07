@@ -45,6 +45,7 @@ data class PlayerLaunch(
     val torrentInfoHash: String? = null,
     val torrentFileIdx: Int? = null,
     val torrentFilename: String? = null,
+    val torrentMagnetUri: String? = null,
     val torrentTrackers: List<String> = emptyList(),
     val initialPositionMs: Long = 0L,
     val initialProgressFraction: Float? = null,
@@ -143,6 +144,15 @@ enum class IosHardwareDecoderMode(
     Auto("auto", "Auto"),
     VideoToolbox("videotoolbox", "VideoToolbox"),
     Off("no", "Off"),
+}
+
+enum class IosAudioOutputMode(
+    val mpvValue: String,
+    val label: String,
+) {
+    Auto("avfoundation,audiounit,", "Auto"),
+    AvFoundation("avfoundation", "AVFoundation"),
+    AudioUnit("audiounit", "AudioUnit"),
 }
 
 @Composable
