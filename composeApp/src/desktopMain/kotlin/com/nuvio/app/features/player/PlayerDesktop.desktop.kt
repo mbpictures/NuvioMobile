@@ -86,6 +86,7 @@ internal actual object PlayerSettingsStorage {
     private const val iosContrastKey = "ios_contrast"
     private const val iosSaturationKey = "ios_saturation"
     private const val iosGammaKey = "ios_gamma"
+    private const val iosAudioOutputModeKey = "ios_audio_output_mode"
     private val syncKeys = listOf(
         showLoadingOverlayKey,
         resizeModeKey,
@@ -147,6 +148,7 @@ internal actual object PlayerSettingsStorage {
         iosContrastKey,
         iosSaturationKey,
         iosGammaKey,
+        iosAudioOutputModeKey,
     )
 
     actual fun loadShowLoadingOverlay(): Boolean? = loadBoolean(showLoadingOverlayKey)
@@ -465,6 +467,12 @@ internal actual object PlayerSettingsStorage {
 
     actual fun saveIosGamma(value: Int) {
         saveInt(iosGammaKey, value)
+    }
+
+    actual fun loadIosAudioOutputMode(): String? = loadString(iosAudioOutputModeKey)
+
+    actual fun saveIosAudioOutputMode(mode: String) {
+        saveString(iosAudioOutputModeKey, mode)
     }
 
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
