@@ -149,6 +149,12 @@ internal fun PlayerScreenRuntime.showVolumeFeedback(level: PlayerAudioLevel) {
 }
 
 internal fun PlayerScreenRuntime.togglePlayback() {
+    val cast = castController
+    if (cast != null && cast.isCasting) {
+        if (cast.playbackSnapshot.isPlaying) cast.pause() else cast.play()
+        controlsVisible = true
+        return
+    }
     if (playbackSnapshot.isPlaying) {
         shouldPlay = false
         playerController?.pause()
@@ -163,8 +169,14 @@ internal fun PlayerScreenRuntime.togglePlayback() {
 }
 
 internal fun PlayerScreenRuntime.seekBy(offsetMs: Long) {
-    playerController?.seekBy(offsetMs)
-    scheduleProgressSyncAfterSeek()
+    val cast = castController
+    if (cast != null && cast.isCasting) {
+        val target = (cast.playbackSnapshot.positionMs + offsetMs).coerceAtLeast(0L)
+        cast.seekTo(target)
+    } else {
+        playerController?.seekBy(offsetMs)
+        scheduleProgressSyncAfterSeek()
+    }
     controlsVisible = true
     when {
         offsetMs > 0L -> showSeekFeedback(PlayerSeekDirection.Forward, offsetMs)

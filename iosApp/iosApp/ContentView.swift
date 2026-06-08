@@ -638,7 +638,11 @@ struct ComposeView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewController {
         // Register MPV player bridge before Compose initializes
         NuvioPlayerRegistration.register()
-        
+        // Register the Google Cast bridge (no-op if the Cast SDK isn't linked).
+        NuvioCastRegistration.register()
+        // Register the DLNA/UPnP bridge (requires the multicast entitlement to discover devices).
+        NuvioDlnaRegistration.register()
+
         let controller = MainViewControllerKt.MainViewController()
         controller.view.backgroundColor = UIColor(red: 0.008, green: 0.016, blue: 0.016, alpha: 1.0)
         return RootComposeViewController(contentController: controller)

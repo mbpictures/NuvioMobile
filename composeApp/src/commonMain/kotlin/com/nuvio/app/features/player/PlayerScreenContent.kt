@@ -19,6 +19,7 @@ import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.p2p.P2pStreamingEngine
+import com.nuvio.app.features.player.cast.rememberCastController
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import nuvio.composeapp.generated.resources.Res
@@ -163,6 +164,9 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
                 }
             }
         }
+
+        runtime.castController = rememberCastController()
+        runtime.BindCastEffects()
 
         runtime.BindPlayerRuntimeEffects()
         runtime.RenderPlayerRuntimeUi()

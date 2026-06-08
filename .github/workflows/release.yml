@@ -238,11 +238,15 @@ jobs:
           # Make sure no stale daemon is hanging around with the old args.
           ./gradlew --stop || true
 
+      - name: Install CocoaPods dependencies
+        working-directory: iosApp
+        run: pod install
+
       - name: Archive iOS app (Release, unsigned)
         run: |
           set -euo pipefail
           xcodebuild \
-            -project iosApp/iosApp.xcodeproj \
+            -workspace iosApp/iosApp.xcworkspace \
             -scheme iosApp \
             -configuration Release \
             -destination 'generic/platform=iOS' \
@@ -636,6 +640,10 @@ jobs:
           # Also expose a copy at a stable path for xcodebuild -authenticationKeyPath.
           cp "$key_file" "$RUNNER_TEMP/AuthKey_${APPSTORE_API_KEY_ID}.p8"
 
+      - name: Install CocoaPods dependencies
+        working-directory: iosApp
+        run: pod install
+
       - name: Archive iOS app (Release, signed for App Store)
         env:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
@@ -644,7 +652,7 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild \
-            -project iosApp/iosApp.xcodeproj \
+            -workspace iosApp/iosApp.xcworkspace \
             -scheme iosApp \
             -configuration Release \
             -destination 'generic/platform=iOS' \

@@ -319,6 +319,8 @@ kotlin {
             implementation(libs.androidx.media3.common)
             implementation(libs.androidx.media3.container)
             implementation(libs.androidx.media3.extractor)
+            implementation(libs.play.services.cast.framework)
+            implementation(libs.androidx.mediarouter)
             implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("lib-*.aar"))))
         }
         commonMain.dependencies {

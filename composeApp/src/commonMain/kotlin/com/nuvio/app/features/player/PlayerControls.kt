@@ -29,6 +29,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Cast
+import androidx.compose.material.icons.rounded.CastConnected
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Fullscreen
@@ -101,6 +103,8 @@ internal fun PlayerControlsShell(
     onEpisodesClick: (() -> Unit)? = null,
     onOpenInExternalPlayer: (() -> Unit)? = null,
     onSubmitIntroClick: (() -> Unit)? = null,
+    onCastClick: (() -> Unit)? = null,
+    isCasting: Boolean = false,
     onPictureInPictureClick: (() -> Unit)? = null,
     onFullscreenClick: (() -> Unit)? = null,
     isFullscreen: Boolean = false,
@@ -164,6 +168,8 @@ internal fun PlayerControlsShell(
                 onParentalGuideAnimationComplete = onParentalGuideAnimationComplete,
                 onLockToggle = onLockToggle,
                 onVideoSettingsClick = onVideoSettingsClick,
+                onCastClick = onCastClick,
+                isCasting = isCasting,
                 onPictureInPictureClick = onPictureInPictureClick,
                 onFullscreenClick = onFullscreenClick,
                 isFullscreen = isFullscreen,
@@ -236,6 +242,8 @@ private fun PlayerHeader(
     onParentalGuideAnimationComplete: () -> Unit,
     onLockToggle: (() -> Unit)?,
     onVideoSettingsClick: (() -> Unit)?,
+    onCastClick: (() -> Unit)? = null,
+    isCasting: Boolean = false,
     onFullscreenClick: (() -> Unit)? = null,
     isFullscreen: Boolean = false,
     onPictureInPictureClick: (() -> Unit)?,
@@ -352,6 +360,15 @@ private fun PlayerHeader(
                             buttonSize = metrics.headerIconSize + 16.dp,
                             iconSize = metrics.headerIconSize,
                             onClick = onSubmitIntroClick,
+                        )
+                    }
+                    if (onCastClick != null) {
+                        PlayerHeaderIconButton(
+                            icon = if (isCasting) Icons.Rounded.CastConnected else Icons.Rounded.Cast,
+                            contentDescription = stringResource(Res.string.player_action_cast),
+                            buttonSize = metrics.headerIconSize + 16.dp,
+                            iconSize = metrics.headerIconSize,
+                            onClick = onCastClick,
                         )
                     }
                     if (onLockToggle != null) {

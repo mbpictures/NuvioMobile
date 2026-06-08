@@ -13,6 +13,7 @@ import com.nuvio.app.features.details.MetaScreenSettingsUiState
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.p2p.P2pSettingsUiState
 import com.nuvio.app.features.p2p.P2pStreamingState
+import com.nuvio.app.features.player.cast.CastController
 import com.nuvio.app.features.player.skip.NextEpisodeInfo
 import com.nuvio.app.features.player.skip.SkipInterval
 import com.nuvio.app.features.streams.StreamsUiState
@@ -91,8 +92,10 @@ internal class PlayerScreenRuntime(
     var gestureController: PlayerGestureController? = null
     var pictureInPictureController: PlayerPictureInPictureController? = null
     var fullscreenController: PlayerFullscreenController? = null
+    var castController: CastController? = null
 
     var controlsVisible by mutableStateOf(true)
+    var showCastPicker by mutableStateOf(false)
     var playerControlsLocked by mutableStateOf(false)
     var activeSourceUrl by mutableStateOf(sourceUrl)
     var activeSourceAudioUrl by mutableStateOf(sourceAudioUrl)

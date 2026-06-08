@@ -25,6 +25,7 @@ import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import com.nuvio.app.features.p2p.P2pStreamingState
+import com.nuvio.app.features.player.cast.CastDevicePicker
 import com.nuvio.app.features.p2p.formatP2pMegabytes
 import com.nuvio.app.features.p2p.formatP2pSpeed
 import com.nuvio.app.isDesktop
@@ -201,11 +202,14 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     playerControllerSourceUrl = activeSourceUrl
                 },
                 onSnapshot = { snapshot ->
-                    playbackSnapshot = snapshot
-                    if (!snapshot.isLoading) initialLoadCompleted = true
-                    if (snapshot.isEnded) {
-                        shouldPlay = false
-                        controlsVisible = !playerControlsLocked
+                    // While casting, the receiver is the source of truth (mirrored separately).
+                    if (castController?.isCasting != true) {
+                        playbackSnapshot = snapshot
+                        if (!snapshot.isLoading) initialLoadCompleted = true
+                        if (snapshot.isEnded) {
+                            shouldPlay = false
+                            controlsVisible = !playerControlsLocked
+                        }
                     }
                 },
                 onError = { message ->
@@ -255,6 +259,14 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             isInPictureInPicture = isInPictureInPicture,
         )
         RenderPlayerModals(displayedPositionMs = displayedPositionMs)
+
+        val cast = castController
+        if (showCastPicker && cast != null) {
+            CastDevicePicker(
+                controller = cast,
+                onDismiss = { showCastPicker = false },
+            )
+        }
     }
 }
 
@@ -354,6 +366,8 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
             onPictureInPictureClick = pictureInPictureController?.takeIf { it.isSupported }?.let { pip ->
                 { pip.enter() }
             },
+            onCastClick = castController?.let { { showCastPicker = true } },
+            isCasting = castController?.isCasting == true,
             onFullscreenClick = fullscreenController?.let { ctrl -> { ctrl.toggle() } },
             isFullscreen = fullscreenController?.isFullscreen == true,
             parentalWarnings = parentalWarnings,
@@ -366,8 +380,13 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
             onScrubFinished = { positionMs ->
                 isScrubbingTimeline = false
                 scrubbingPositionMs = null
-                playerController?.seekTo(positionMs)
-                scheduleProgressSyncAfterSeek()
+                val cast = castController
+                if (cast != null && cast.isCasting) {
+                    cast.seekTo(positionMs)
+                } else {
+                    playerController?.seekTo(positionMs)
+                    scheduleProgressSyncAfterSeek()
+                }
             },
             horizontalSafePadding = horizontalSafePadding,
             modifier = Modifier.fillMaxSize(),
