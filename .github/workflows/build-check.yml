@@ -93,6 +93,10 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      - name: Install CocoaPods dependencies
+        working-directory: iosApp
+        run: pod install
+
       # Both iOS distributions (appstore / full) swap source dirs and deps,
       # so each must be type-checked independently.
       - name: Compile shared Kotlin/Native (appstore distribution)
@@ -105,7 +109,7 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild \
-            -project iosApp/iosApp.xcodeproj \
+            -workspace iosApp/iosApp.xcworkspace \
             -scheme iosApp \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
