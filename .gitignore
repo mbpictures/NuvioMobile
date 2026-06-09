@@ -21,7 +21,6 @@ captures
 node_modules/
 logs/
 analysis/
-Docs
 keystore/
 scripts/build-distribution.sh
 asset
