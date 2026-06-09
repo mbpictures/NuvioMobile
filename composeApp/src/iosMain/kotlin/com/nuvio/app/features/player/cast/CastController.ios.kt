@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.nuvio.app.features.player.sanitizePlaybackHeaders
+import kotlinx.serialization.json.Json
 
 /**
  * Bridge to the Swift Google Cast implementation. Swift implements [NuvioCastBridge] (backed by the
@@ -41,6 +43,7 @@ interface NuvioCastBridge {
         posterUrl: String,
         contentType: String,
         startPositionMs: Long,
+        headersJson: String,
     )
 
     fun play()
@@ -93,6 +96,12 @@ object NuvioDlnaBridgeFactory {
     fun create(): NuvioCastBridge? = factoryRef?.createBridge()
 
     val isRegistered: Boolean get() = factoryRef != null
+}
+
+private fun encodeCastHeaders(headers: Map<String, String>): String {
+    val sanitized = sanitizePlaybackHeaders(headers)
+    if (sanitized.isEmpty()) return ""
+    return runCatching { Json.encodeToString(sanitized) }.getOrDefault("")
 }
 
 private class IosCastController(private val bridge: NuvioCastBridge) : CastController {
@@ -150,6 +159,7 @@ private class IosCastController(private val bridge: NuvioCastBridge) : CastContr
             posterUrl = request.posterUrl ?: "",
             contentType = request.contentType ?: guessCastContentType(request.url),
             startPositionMs = request.startPositionMs,
+            headersJson = encodeCastHeaders(request.headers),
         )
     }
 

@@ -256,6 +256,8 @@ internal class CombinedAndroidCastController(
     private val dlna: DlnaController,
 ) : CastController {
 
+    private val proxyServer = CastProxyServer()
+
     override val connectionState: CastConnectionState
         get() {
             val c = cast?.connectionState ?: CastConnectionState.Unavailable
@@ -294,6 +296,7 @@ internal class CombinedAndroidCastController(
     fun detach() {
         cast?.detach()
         dlna.detach()
+        proxyServer.stop()
     }
 
     override fun startDiscovery() {
@@ -313,10 +316,30 @@ internal class CombinedAndroidCastController(
     override fun disconnect() {
         dlna.disconnect()
         cast?.disconnect()
+        proxyServer.stop()
     }
 
     override fun loadMedia(request: CastMediaRequest) {
-        if (dlnaActive) dlna.loadMedia(request) else cast?.loadMedia(request)
+        val routed = routeThroughProxy(request)
+        if (dlnaActive) dlna.loadMedia(routed) else cast?.loadMedia(routed)
+    }
+
+    private fun routeThroughProxy(request: CastMediaRequest): CastMediaRequest {
+        val headers = request.headers
+            .mapNotNull { (rawKey, rawValue) ->
+                val key = rawKey.trim()
+                val value = rawValue.trim()
+                if (key.isBlank() || value.isBlank() || key.equals("Range", ignoreCase = true)) null else key to value
+            }
+            .toMap()
+        if (headers.isEmpty()) return request
+        val proxiedUrl = proxyServer.prepare(request.url, headers) ?: return request
+        Log.i(TAG, "casting via local proxy to forward headers: ${headers.keys.joinToString()}")
+        return request.copy(
+            url = proxiedUrl,
+            contentType = request.contentType ?: guessCastContentType(request.url),
+            headers = emptyMap(),
+        )
     }
 
     override fun play() {
