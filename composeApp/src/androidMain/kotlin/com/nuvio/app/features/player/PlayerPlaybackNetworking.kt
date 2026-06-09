@@ -58,6 +58,8 @@ internal object PlayerPlaybackNetworking {
             .build()
     }
 
+    fun sharedPlaybackClient(): OkHttpClient = playbackHttpClient
+
     fun createHttpDataSourceFactory(defaultHeaders: Map<String, String> = emptyMap()): DataSource.Factory {
         val requestHeaders = sanitizeHeaders(defaultHeaders)
         val client = requestHeaders.headerValue("Authorization")?.let { authorization ->
