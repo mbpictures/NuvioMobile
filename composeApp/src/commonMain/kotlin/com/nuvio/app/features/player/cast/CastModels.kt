@@ -25,9 +25,11 @@ enum class CastConnectionState {
 /**
  * Everything a receiver needs to start playing a stream.
  *
- * For the default (non-custom) Cast receiver, [headers] are best-effort only: the receiver fetches
- * [url] itself, so streams whose authorization lives in the URL (debrid/tokenized links) play
- * reliably, while streams that strictly require request headers may be rejected by the receiver.
+ * Receivers fetch [url] themselves, so they can't natively send [headers]. On Android the cast
+ * controller works around this by routing header-authenticated streams through a local proxy that
+ * re-fetches the stream with the headers (see CastProxyServer), so [headers]-protected streams play
+ * on both Chromecast and DLNA. On platforms without that proxy, [headers] are best-effort and only
+ * streams whose authorization lives in the URL (debrid/tokenized links) are guaranteed to play.
  */
 data class CastMediaRequest(
     val url: String,
