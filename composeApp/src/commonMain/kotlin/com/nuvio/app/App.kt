@@ -98,11 +98,13 @@ import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.NuvioFloatingPrompt
 import com.nuvio.app.core.ui.TraktListPickerDialog
 import com.nuvio.app.core.ui.NuvioTheme
+import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.LocalNuvioBottomNavigationOverlayPadding
 import com.nuvio.app.core.ui.NativeNavigationTab
 import com.nuvio.app.core.ui.NativeTabBridge
 import com.nuvio.app.core.ui.isLiquidGlassNativeTabBarSupported
 import com.nuvio.app.core.ui.localizedContinueWatchingSubtitle
+import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.auth.AuthScreen
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.catalog.CatalogRepository
@@ -550,10 +552,10 @@ fun App() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background),
+                            .background(MaterialTheme.nuvio.colors.background),
                         contentAlignment = Alignment.Center,
                     ) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        CircularProgressIndicator(color = MaterialTheme.nuvio.colors.accent)
                     }
                 }
                 AppGateScreen.Auth.name -> {
@@ -1392,7 +1394,7 @@ private fun MainAppContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.nuvio.colors.background),
         ) {
             SharedTransitionLayout {
                 NavHost(
@@ -2146,7 +2148,7 @@ private fun MainAppContent(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center,
                         ) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            CircularProgressIndicator(color = MaterialTheme.nuvio.colors.accent)
                         }
                         return@composable
                     }
@@ -2339,17 +2341,17 @@ private fun MainAppContent(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.82f)),
+                                    .background(MaterialTheme.nuvio.colors.overlayScrim.copy(alpha = MaterialTheme.nuvio.opacity.overlayHeavy)),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(MaterialTheme.nuvio.spacing.cardPadding),
                                 ) {
-                                    CircularProgressIndicator(color = Color.White)
+                                    CircularProgressIndicator(color = MaterialTheme.nuvio.colors.playerControlsForeground)
                                     Text(
                                         text = stringResource(Res.string.streams_finding_source),
-                                        color = Color.White.copy(alpha = 0.82f),
+                                        color = MaterialTheme.nuvio.colors.playerControlsForeground.copy(alpha = MaterialTheme.nuvio.opacity.overlayHeavy),
                                         style = MaterialTheme.typography.bodyMedium,
                                     )
                                 }
@@ -3011,23 +3013,24 @@ private fun TabletFloatingTopBar(
     onAddProfileRequested: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val tokens = MaterialTheme.nuvio
     val statusBarPadding = nuvioStatusBarTopPadding()
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = statusBarPadding + 10.dp, bottom = 8.dp),
+            .padding(top = statusBarPadding + NuvioTokens.Space.s10, bottom = tokens.spacing.controlGap),
         contentAlignment = Alignment.TopCenter,
     ) {
         Surface(
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            shape = RoundedCornerShape(999.dp),
-            tonalElevation = 4.dp,
-            shadowElevation = 10.dp,
+            color = tokens.colors.surface.copy(alpha = tokens.opacity.visible - tokens.opacity.subtle),
+            shape = tokens.shapes.chip,
+            tonalElevation = tokens.elevation.playerControls,
+            shadowElevation = tokens.elevation.overlay,
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = NuvioTokens.Space.s10, vertical = tokens.spacing.controlGap),
+                horizontalArrangement = Arrangement.spacedBy(tokens.spacing.controlGap),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TabletTopPillItem(
@@ -3038,11 +3041,11 @@ private fun TabletFloatingTopBar(
                         Icon(
                             imageVector = Icons.Filled.Home,
                             contentDescription = stringResource(Res.string.compose_nav_home),
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(NuvioTokens.Space.s18),
                             tint = if (selectedTab == AppScreenTab.Home) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
+                                tokens.colors.textPrimary
                             } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                                tokens.colors.textMuted
                             },
                         )
                     },
@@ -3055,11 +3058,11 @@ private fun TabletFloatingTopBar(
                         Icon(
                             painter = painterResource(Res.drawable.sidebar_search),
                             contentDescription = stringResource(Res.string.compose_nav_search),
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(NuvioTokens.Space.s18),
                             tint = if (selectedTab == AppScreenTab.Search) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
+                                tokens.colors.textPrimary
                             } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                                tokens.colors.textMuted
                             },
                         )
                     },
@@ -3072,26 +3075,26 @@ private fun TabletFloatingTopBar(
                         Icon(
                             painter = painterResource(Res.drawable.sidebar_library),
                             contentDescription = stringResource(Res.string.compose_nav_library),
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(NuvioTokens.Space.s18),
                             tint = if (selectedTab == AppScreenTab.Library) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
+                                tokens.colors.textPrimary
                             } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                                tokens.colors.textMuted
                             },
                         )
                     },
                 )
                 Surface(
                     color = if (selectedTab == AppScreenTab.Settings) {
-                        MaterialTheme.colorScheme.primaryContainer
+                        tokens.colors.overlaySelected
                     } else {
-                        MaterialTheme.colorScheme.surface
+                        tokens.colors.surface
                     },
-                    shape = RoundedCornerShape(999.dp),
+                    shape = tokens.shapes.chip,
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(horizontal = tokens.spacing.listGap, vertical = tokens.spacing.controlGap),
+                        horizontalArrangement = Arrangement.spacedBy(tokens.spacing.controlGap),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         ProfileSwitcherTab(
@@ -3105,9 +3108,9 @@ private fun TabletFloatingTopBar(
                             modifier = Modifier.clickable { onTabSelected(AppScreenTab.Settings) },
                             style = MaterialTheme.typography.labelLarge,
                             color = if (selectedTab == AppScreenTab.Settings) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
+                                tokens.colors.textPrimary
                             } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
+                                tokens.colors.textMuted
                             },
                         )
                     }
@@ -3127,15 +3130,16 @@ private fun TabletTopPillItem(
     onClick: () -> Unit,
     icon: @Composable () -> Unit,
 ) {
+    val tokens = MaterialTheme.nuvio
     Surface(
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(999.dp),
-        tonalElevation = if (selected) 2.dp else 0.dp,
+        color = if (selected) tokens.colors.overlaySelected else tokens.colors.surface,
+        shape = tokens.shapes.chip,
+        tonalElevation = if (selected) tokens.elevation.raised else tokens.elevation.flat,
         modifier = Modifier.clickable(onClick = onClick),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = tokens.components.chipHorizontalPadding, vertical = NuvioTokens.Space.s10),
+            horizontalArrangement = Arrangement.spacedBy(tokens.spacing.controlGap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             icon()
@@ -3143,9 +3147,9 @@ private fun TabletTopPillItem(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
+                    tokens.colors.textPrimary
                 } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                    tokens.colors.textMuted
                 },
             )
         }
@@ -3156,10 +3160,11 @@ private fun TabletTopPillItem(
 private fun AppLaunchOverlay(
     modifier: Modifier = Modifier,
 ) {
+    val tokens = MaterialTheme.nuvio
     Box(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.background)
-            .zIndex(10f),
+            .background(tokens.colors.background)
+            .zIndex(NuvioTokens.Z.dialog),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -3173,8 +3178,8 @@ private fun AppLaunchOverlay(
                     .height(44.dp),
                 contentScale = ContentScale.Fit,
             )
-            Spacer(modifier = Modifier.height(24.dp))
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(tokens.spacing.sectionGap))
+            CircularProgressIndicator(color = tokens.colors.accent)
         }
     }
 }
