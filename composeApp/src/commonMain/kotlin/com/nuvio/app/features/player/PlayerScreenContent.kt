@@ -2,7 +2,9 @@ package com.nuvio.app.features.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -12,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.LocalWindowChromeImmersiveRequest
 import com.nuvio.app.features.addons.AddonRepository
@@ -81,6 +84,7 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
             .background(Color.Black),
     ) {
         val density = LocalDensity.current
+        val layoutDirection = LocalLayoutDirection.current
         val horizontalSafePadding = playerHorizontalSafePadding()
         val metrics = remember(maxWidth) { PlayerLayoutMetrics.fromWidth(maxWidth) }
 
@@ -103,9 +107,13 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
         runtime.metrics = metrics
         runtime.sliderEdgePadding = horizontalSafePadding + metrics.horizontalPadding
         runtime.overlayBottomPadding = sliderOverlayBottomPadding(metrics)
-        runtime.sideGestureSystemEdgeExclusionPx = with(density) {
-            PlayerSideGestureSystemEdgeExclusion.toPx()
-        }
+        val systemGestureInsets = WindowInsets.systemGestures
+        runtime.systemGestureEdges = PlayerSystemGestureEdges(
+            leftPx = systemGestureInsets.getLeft(density, layoutDirection).toFloat(),
+            rightPx = systemGestureInsets.getRight(density, layoutDirection).toFloat(),
+            topPx = systemGestureInsets.getTop(density).toFloat(),
+            bottomPx = systemGestureInsets.getBottom(density).toFloat(),
+        )
         runtime.resizeModeFitLabel = stringResource(Res.string.compose_player_resize_fit)
         runtime.resizeModeFillLabel = stringResource(Res.string.compose_player_resize_fill)
         runtime.resizeModeZoomLabel = stringResource(Res.string.compose_player_resize_zoom)

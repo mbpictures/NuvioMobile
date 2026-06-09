@@ -79,7 +79,7 @@ internal class PlayerScreenRuntime(
     var metrics: PlayerLayoutMetrics = PlayerLayoutMetrics.fromWidth(0.dp)
     var sliderEdgePadding: Dp = 0.dp
     var overlayBottomPadding: Dp = 0.dp
-    var sideGestureSystemEdgeExclusionPx: Float = 0f
+    var systemGestureEdges: PlayerSystemGestureEdges = PlayerSystemGestureEdges()
     var resizeModeFitLabel: String = ""
     var resizeModeFillLabel: String = ""
     var resizeModeZoomLabel: String = ""

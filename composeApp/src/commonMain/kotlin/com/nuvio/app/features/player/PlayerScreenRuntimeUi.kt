@@ -173,7 +173,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             .playerSurfaceDragGestures(
                 gestureController = gestureController,
                 layoutSize = layoutSize,
-                sideGestureSystemEdgeExclusionPx = sideGestureSystemEdgeExclusionPx,
+                systemGestureEdges = systemGestureEdges,
                 playerControlsLockedState = gestureCallbacks.playerControlsLocked,
                 isHoldToSpeedGestureActiveState = gestureCallbacks.isHoldToSpeedGestureActive,
                 currentPositionMsState = gestureCallbacks.currentPositionMs,
