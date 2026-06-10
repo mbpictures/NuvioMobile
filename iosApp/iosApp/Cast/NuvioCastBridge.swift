@@ -168,12 +168,17 @@ final class NuvioCastBridgeImpl: NSObject, NuvioCastBridge {
 
     func getPositionMs() -> Int64 {
         guard let client = remoteClient else { return 0 }
-        return Int64(client.approximateStreamPosition() * 1000)
+        return Self.toMs(client.approximateStreamPosition())
     }
 
     func getDurationMs() -> Int64 {
         let duration = remoteClient?.mediaStatus?.mediaInformation?.streamDuration ?? 0
-        return Int64(duration * 1000)
+        return Self.toMs(duration)
+    }
+
+    private static func toMs(_ seconds: TimeInterval) -> Int64 {
+        guard seconds.isFinite else { return 0 }
+        return Int64(seconds * 1000)
     }
 
     func getIsPlaying() -> Bool {
