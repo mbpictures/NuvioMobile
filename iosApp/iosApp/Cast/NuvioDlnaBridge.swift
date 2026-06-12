@@ -207,12 +207,16 @@ final class NuvioDlnaBridgeImpl: NSObject, NuvioCastBridge {
         posterUrl: String,
         contentType: String,
         startPositionMs: Int64,
+        headersJson: String,
     ) {
+        // DLNA renderers fetch the URL themselves and can't send headers; route header-authenticated
+        // streams through the local proxy. contentType stays derived from the real URL.
+        let effectiveUrl = CastHttpProxy.shared.rewriteIfNeeded(url: url, headersJson: headersJson) ?? url
         queue.async { [weak self] in
             guard let self, let renderer = self.connected else { return }
-            let didl = self.buildDidl(url: url, title: title, contentType: contentType)
+            let didl = self.buildDidl(url: effectiveUrl, title: title, contentType: contentType)
             let inner = "<InstanceID>0</InstanceID>" +
-                "<CurrentURI>\(self.xmlEscape(url))</CurrentURI>" +
+                "<CurrentURI>\(self.xmlEscape(effectiveUrl))</CurrentURI>" +
                 "<CurrentURIMetaData>\(self.xmlEscape(didl))</CurrentURIMetaData>"
             self.soap(renderer.controlURL, "SetAVTransportURI", inner) { [weak self] _ in
                 guard let self else { return }

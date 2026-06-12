@@ -121,9 +121,13 @@ final class NuvioCastBridgeImpl: NSObject, NuvioCastBridge {
         posterUrl: String,
         contentType: String,
         startPositionMs: Int64,
+        headersJson: String,
     ) {
+        // Receivers fetch the URL themselves and can't send headers; route header-authenticated
+        // streams through the local proxy. contentType stays derived from the real URL.
+        let effectiveUrl = CastHttpProxy.shared.rewriteIfNeeded(url: url, headersJson: headersJson) ?? url
         guard let client = sessionManager.currentCastSession?.remoteMediaClient,
-              let mediaURL = URL(string: url) else { return }
+              let mediaURL = URL(string: effectiveUrl) else { return }
 
         let metadata = GCKMediaMetadata(metadataType: .movie)
         metadata.setString(title, forKey: kGCKMetadataKeyTitle)
@@ -164,12 +168,17 @@ final class NuvioCastBridgeImpl: NSObject, NuvioCastBridge {
 
     func getPositionMs() -> Int64 {
         guard let client = remoteClient else { return 0 }
-        return Int64(client.approximateStreamPosition() * 1000)
+        return Self.toMs(client.approximateStreamPosition())
     }
 
     func getDurationMs() -> Int64 {
         let duration = remoteClient?.mediaStatus?.mediaInformation?.streamDuration ?? 0
-        return Int64(duration * 1000)
+        return Self.toMs(duration)
+    }
+
+    private static func toMs(_ seconds: TimeInterval) -> Int64 {
+        guard seconds.isFinite else { return 0 }
+        return Int64(seconds * 1000)
     }
 
     func getIsPlaying() -> Bool {
