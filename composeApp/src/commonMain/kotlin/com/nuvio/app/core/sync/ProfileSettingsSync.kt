@@ -59,6 +59,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
 
 private const val PUSH_DEBOUNCE_MS = 1500L
+private const val APP_LANGUAGE_SYNC_KEY = "selected_app_language"
 
 object ProfileSettingsSync {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -77,6 +78,9 @@ object ProfileSettingsSync {
 
     @Volatile
     private var skipNextPushSignature: String? = null
+
+    @Volatile
+    private var pendingLocalAppLanguageCode: String? = null
 
     private var observeJob: Job? = null
 
@@ -125,7 +129,7 @@ object ProfileSettingsSync {
                         return@withLock false
                     }
 
-                    applyRemoteBlob(remoteBlob)
+                    applyRemoteBlob(remoteBlob.withPendingLocalAppLanguage())
                     skipNextPushSignature = currentObservedStateSignature()
                 } finally {
                     isApplyingRemoteBlob = false
@@ -144,13 +148,22 @@ object ProfileSettingsSync {
 
     suspend fun pushCurrentProfileToRemote() {
         ensureRepositoriesLoaded()
+        val authState = AuthRepository.state.value
+        if (authState !is AuthState.Authenticated || authState.isAnonymous) return
         syncMutex.withLock {
             runCatching {
                 pushToRemoteLocked(ProfileRepository.activeProfileId, exportSettingsBlob())
+                if (pendingLocalAppLanguageCode == ThemeSettingsRepository.selectedAppLanguage.value.code) {
+                    pendingLocalAppLanguageCode = null
+                }
             }.onFailure { error ->
                 log.e(error) { "pushCurrentProfileToRemote() — FAILED" }
             }
         }
+    }
+
+    fun markAppLanguageChanged() {
+        pendingLocalAppLanguageCode = ThemeSettingsRepository.selectedAppLanguage.value.code
     }
 
     @OptIn(FlowPreview::class)
@@ -159,6 +172,7 @@ object ProfileSettingsSync {
             ThemeSettingsRepository.selectedTheme.map { "theme" },
             ThemeSettingsRepository.amoledEnabled.map { "amoled" },
             ThemeSettingsRepository.liquidGlassNativeTabBarEnabled.map { "liquid_glass_tab_bar" },
+            ThemeSettingsRepository.selectedAppLanguage.map { "app_language" },
             PosterCardStyleRepository.uiState.map { "poster_card_style" },
             PlayerSettingsRepository.uiState.map { "player" },
             StreamBadgeSettingsRepository.uiState.map { "stream_badges" },
@@ -291,6 +305,7 @@ object ProfileSettingsSync {
         "theme=${ThemeSettingsRepository.selectedTheme.value.name}",
         "amoled=${ThemeSettingsRepository.amoledEnabled.value}",
         "liquid_glass_tab_bar=${ThemeSettingsRepository.liquidGlassNativeTabBarEnabled.value}",
+        "app_language=${ThemeSettingsRepository.selectedAppLanguage.value.code}",
         "poster_card_style=${PosterCardStyleRepository.uiState.value}",
         "player=${PlayerSettingsRepository.uiState.value}",
         "stream_badges=${StreamBadgeSettingsRepository.uiState.value}",
@@ -304,6 +319,18 @@ object ProfileSettingsSync {
         "trakt_comments=${TraktCommentsSettings.enabled.value}",
         "episode_release_alerts=${EpisodeReleaseNotificationsRepository.uiState.value.isEnabled}",
     ).joinToString(separator = "||")
+
+    private fun MobileProfileSettingsBlob.withPendingLocalAppLanguage(): MobileProfileSettingsBlob {
+        val languageCode = pendingLocalAppLanguageCode ?: return this
+        return copy(
+            features = features.copy(
+                themeSettings = buildJsonObject {
+                    features.themeSettings.forEach { (key, value) -> put(key, value) }
+                    put(APP_LANGUAGE_SYNC_KEY, encodeSyncString(languageCode))
+                },
+            ),
+        )
+    }
 }
 
 @Serializable

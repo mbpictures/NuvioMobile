@@ -77,6 +77,7 @@ import nuvio.composeapp.generated.resources.plugins_test_error_title
 import nuvio.composeapp.generated.resources.plugins_test_failed
 import nuvio.composeapp.generated.resources.plugins_test_results_count
 import nuvio.composeapp.generated.resources.plugins_tmdb_required_message
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -120,7 +121,6 @@ fun PluginsSettingsPageContent(
     val repoFallbackLabel = stringResource(Res.string.plugins_repo_fallback_label)
     val testFailedDefault = stringResource(Res.string.plugins_test_failed)
     val testErrorTitle = stringResource(Res.string.plugins_test_error_title)
-    val installedTemplate = stringResource(Res.string.plugins_message_installed)
     val enterRepoUrlError = stringResource(Res.string.plugins_error_enter_repo_url)
 
     Column(
@@ -244,7 +244,7 @@ fun PluginsSettingsPageContent(
                         when (val result = PluginRepository.addRepository(requested)) {
                             is AddPluginRepositoryResult.Success -> {
                                 repositoryUrl = ""
-                                message = installedTemplate.replace("%1\$s", result.repository.name)
+                                message = getString(Res.string.plugins_message_installed, result.repository.name)
                             }
                             is AddPluginRepositoryResult.Error -> {
                                 message = result.message

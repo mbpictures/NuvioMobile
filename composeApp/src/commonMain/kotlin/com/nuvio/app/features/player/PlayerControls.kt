@@ -2,9 +2,12 @@ package com.nuvio.app.features.player
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,10 +29,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Cast
+import androidx.compose.material.icons.rounded.CastConnected
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SwapHoriz
@@ -43,12 +51,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontStyle
@@ -56,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.AppIconResource
+import com.nuvio.app.core.ui.LocalWindowChromeTopInset
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.appIconPainter
 import com.nuvio.app.core.ui.nuvioTypeScale
@@ -76,7 +89,7 @@ internal fun PlayerControlsShell(
     resizeMode: PlayerResizeMode,
     isLocked: Boolean,
     showPlaybackControls: Boolean = true,
-    onLockToggle: () -> Unit,
+    onLockToggle: (() -> Unit)? = null,
     onBack: () -> Unit,
     onTogglePlayback: () -> Unit,
     onSeekBack: () -> Unit,
@@ -90,6 +103,11 @@ internal fun PlayerControlsShell(
     onEpisodesClick: (() -> Unit)? = null,
     onOpenInExternalPlayer: (() -> Unit)? = null,
     onSubmitIntroClick: (() -> Unit)? = null,
+    onCastClick: (() -> Unit)? = null,
+    isCasting: Boolean = false,
+    onPictureInPictureClick: (() -> Unit)? = null,
+    onFullscreenClick: (() -> Unit)? = null,
+    isFullscreen: Boolean = false,
     parentalWarnings: List<ParentalWarning> = emptyList(),
     showParentalGuide: Boolean = false,
     onParentalGuideAnimationComplete: () -> Unit = {},
@@ -150,11 +168,17 @@ internal fun PlayerControlsShell(
                 onParentalGuideAnimationComplete = onParentalGuideAnimationComplete,
                 onLockToggle = onLockToggle,
                 onVideoSettingsClick = onVideoSettingsClick,
+                onCastClick = onCastClick,
+                isCasting = isCasting,
+                onPictureInPictureClick = onPictureInPictureClick,
+                onFullscreenClick = onFullscreenClick,
+                isFullscreen = isFullscreen,
                 onBack = onBack,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.safeContent.only(WindowInsetsSides.Top))
+                    .padding(top = LocalWindowChromeTopInset.current)
                     .padding(
                         start = metrics.horizontalPadding,
                         end = metrics.horizontalPadding,
@@ -216,8 +240,13 @@ private fun PlayerHeader(
     parentalWarnings: List<ParentalWarning>,
     showParentalGuide: Boolean,
     onParentalGuideAnimationComplete: () -> Unit,
-    onLockToggle: () -> Unit,
+    onLockToggle: (() -> Unit)?,
     onVideoSettingsClick: (() -> Unit)?,
+    onCastClick: (() -> Unit)? = null,
+    isCasting: Boolean = false,
+    onFullscreenClick: (() -> Unit)? = null,
+    isFullscreen: Boolean = false,
+    onPictureInPictureClick: (() -> Unit)?,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -233,9 +262,24 @@ private fun PlayerHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top,
         ) {
-            Box(
+            Row(
                 modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
             ) {
+                if (showActions) {
+                    NuvioBackButton(
+                        onClick = onBack,
+                        containerColor = Color.Black.copy(alpha = 0.35f),
+                        contentColor = Color.White,
+                        buttonSize = metrics.headerIconSize + 16.dp,
+                        iconSize = metrics.headerIconSize,
+                        contentDescription = stringResource(Res.string.compose_player_close),
+                    )
+                }
+                Box(
+                    modifier = Modifier.weight(1f),
+                ) {
                 Column(
                     modifier = Modifier.graphicsLayer { alpha = metadataAlpha },
                     verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -301,6 +345,7 @@ private fun PlayerHeader(
                     onAnimationComplete = onParentalGuideAnimationComplete,
                     contentPadding = PaddingValues(0.dp),
                 )
+                }
             }
 
             if (showActions) {
@@ -317,17 +362,37 @@ private fun PlayerHeader(
                             onClick = onSubmitIntroClick,
                         )
                     }
-                    PlayerHeaderIconButton(
-                        icon = if (isLocked) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
-                        contentDescription = if (isLocked) {
-                            stringResource(Res.string.compose_player_unlock_controls)
-                        } else {
-                            stringResource(Res.string.compose_player_lock_controls)
-                        },
-                        buttonSize = metrics.headerIconSize + 16.dp,
-                        iconSize = metrics.headerIconSize,
-                        onClick = onLockToggle,
-                    )
+                    if (onCastClick != null) {
+                        PlayerHeaderIconButton(
+                            icon = if (isCasting) Icons.Rounded.CastConnected else Icons.Rounded.Cast,
+                            contentDescription = stringResource(Res.string.player_action_cast),
+                            buttonSize = metrics.headerIconSize + 16.dp,
+                            iconSize = metrics.headerIconSize,
+                            onClick = onCastClick,
+                        )
+                    }
+                    if (onLockToggle != null) {
+                        PlayerHeaderIconButton(
+                            icon = if (isLocked) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
+                            contentDescription = if (isLocked) {
+                                stringResource(Res.string.compose_player_unlock_controls)
+                            } else {
+                                stringResource(Res.string.compose_player_lock_controls)
+                            },
+                            buttonSize = metrics.headerIconSize + 16.dp,
+                            iconSize = metrics.headerIconSize,
+                            onClick = onLockToggle,
+                        )
+                    }
+                    if (onPictureInPictureClick != null) {
+                        PlayerHeaderIconButton(
+                            icon = Icons.Rounded.PictureInPictureAlt,
+                            contentDescription = "Picture in picture",
+                            buttonSize = metrics.headerIconSize + 16.dp,
+                            iconSize = metrics.headerIconSize,
+                            onClick = onPictureInPictureClick,
+                        )
+                    }
                     if (onVideoSettingsClick != null) {
                         PlayerHeaderIconButton(
                             icon = Icons.Rounded.Build,
@@ -337,18 +402,53 @@ private fun PlayerHeader(
                             onClick = onVideoSettingsClick,
                         )
                     }
-                    NuvioBackButton(
-                        onClick = onBack,
-                        containerColor = Color.Black.copy(alpha = 0.35f),
-                        contentColor = Color.White,
-                        buttonSize = metrics.headerIconSize + 16.dp,
-                        iconSize = metrics.headerIconSize,
-                        contentDescription = stringResource(Res.string.compose_player_close),
-                    )
+                    if (onFullscreenClick != null) {
+                        PlayerHeaderIconButton(
+                            icon = if (isFullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
+                            contentDescription = if (isFullscreen) "Exit fullscreen" else "Enter fullscreen",
+                            buttonSize = metrics.headerIconSize + 16.dp,
+                            iconSize = metrics.headerIconSize,
+                            onClick = onFullscreenClick,
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+/**
+ * Hover treatment shared by the player's control buttons: a white highlight that fades in over
+ * the [restingColor] plus a subtle scale-up, both driven by [interactionSource]. Pass the same
+ * source to the button's `clickable` (with the default indication) so the existing press ripple
+ * is kept and the hover state is fed from the pointer. Apply this before `clickable` and any inner
+ * padding so the highlight fills the whole button [shape].
+ */
+@Composable
+private fun Modifier.playerButtonHover(
+    interactionSource: MutableInteractionSource,
+    shape: Shape,
+    restingColor: Color = Color.Transparent,
+): Modifier {
+    val hovered by interactionSource.collectIsHoveredAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (hovered) 1.08f else 1f,
+        animationSpec = tween(durationMillis = 120),
+        label = "playerButtonHoverScale",
+    )
+    val highlightAlpha by animateFloatAsState(
+        targetValue = if (hovered) 0.22f else 0f,
+        animationSpec = tween(durationMillis = 120),
+        label = "playerButtonHoverHighlight",
+    )
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .clip(shape)
+        .background(restingColor)
+        .background(Color.White.copy(alpha = highlightAlpha))
 }
 
 @Composable
@@ -359,12 +459,16 @@ private fun PlayerHeaderIconButton(
     iconSize: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .size(buttonSize)
-            .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.35f))
-            .clickable(onClick = onClick),
+            .playerButtonHover(interactionSource, CircleShape, restingColor = Color.Black.copy(alpha = 0.35f))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -418,10 +522,15 @@ private fun SideControlButton(
     metrics: PlayerLayoutMetrics,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .playerButtonHover(interactionSource, CircleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            )
             .padding(metrics.sideButtonPadding),
         contentAlignment = Alignment.Center,
     ) {
@@ -445,10 +554,15 @@ private fun PlayPauseControlButton(
         if (isPlaying) AppIconResource.PlayerPause else AppIconResource.PlayerPlay,
     )
 
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .playerButtonHover(interactionSource, CircleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            )
             .padding(metrics.playButtonPadding),
         contentAlignment = Alignment.Center,
     ) {
@@ -496,14 +610,20 @@ private fun ProgressControls(
     val audioPainter = appIconPainter(AppIconResource.PlayerAudioFilled)
 
     Column(modifier = modifier) {
+        var pendingScrubValue by remember { mutableStateOf(displayedPositionMs.toFloat()) }
         Slider(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(metrics.sliderTouchHeight)
                 .graphicsLayer(scaleY = metrics.sliderScaleY),
             value = displayedPositionMs.coerceIn(0L, durationMs).toFloat(),
-            onValueChange = { value -> onScrubChange(value.toLong()) },
-            onValueChangeFinished = { onScrubFinished(displayedPositionMs.coerceIn(0L, durationMs)) },
+            onValueChange = { value ->
+                pendingScrubValue = value
+                onScrubChange(value.toLong())
+            },
+            onValueChangeFinished = {
+                onScrubFinished(pendingScrubValue.toLong().coerceIn(0L, durationMs))
+            },
             valueRange = 0f..durationMs.toFloat(),
         )
         Row(
@@ -712,10 +832,15 @@ private fun PlayerActionPillButton(
     icon: ImageVector? = null,
     painter: Painter? = null,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(22.dp))
-            .clickable(onClick = onClick)
+            .playerButtonHover(interactionSource, RoundedCornerShape(22.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            )
             .padding(horizontal = 12.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,

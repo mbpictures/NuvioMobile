@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import com.nuvio.app.core.ui.nuvioStatusBarTopPadding
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -99,7 +100,7 @@ fun ProfileSelectionScreen(
         manageAlpha.animateTo(1f, tween(500))
     }
 
-    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusBarTop = nuvioStatusBarTopPadding()
 
     BoxWithConstraints(
         modifier = modifier

@@ -2,8 +2,11 @@ package com.nuvio.app.features.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemGestures
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -11,12 +14,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.core.ui.LocalWindowChromeImmersiveRequest
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.p2p.P2pStreamingEngine
+import com.nuvio.app.features.player.cast.rememberCastController
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import nuvio.composeapp.generated.resources.Res
@@ -78,6 +84,7 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
             .background(Color.Black),
     ) {
         val density = LocalDensity.current
+        val layoutDirection = LocalLayoutDirection.current
         val horizontalSafePadding = playerHorizontalSafePadding()
         val metrics = remember(maxWidth) { PlayerLayoutMetrics.fromWidth(maxWidth) }
 
@@ -100,9 +107,13 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
         runtime.metrics = metrics
         runtime.sliderEdgePadding = horizontalSafePadding + metrics.horizontalPadding
         runtime.overlayBottomPadding = sliderOverlayBottomPadding(metrics)
-        runtime.sideGestureSystemEdgeExclusionPx = with(density) {
-            PlayerSideGestureSystemEdgeExclusion.toPx()
-        }
+        val systemGestureInsets = WindowInsets.systemGestures
+        runtime.systemGestureEdges = PlayerSystemGestureEdges(
+            leftPx = systemGestureInsets.getLeft(density, layoutDirection).toFloat(),
+            rightPx = systemGestureInsets.getRight(density, layoutDirection).toFloat(),
+            topPx = systemGestureInsets.getTop(density).toFloat(),
+            bottomPx = systemGestureInsets.getBottom(density).toFloat(),
+        )
         runtime.resizeModeFitLabel = stringResource(Res.string.compose_player_resize_fit)
         runtime.resizeModeFillLabel = stringResource(Res.string.compose_player_resize_fill)
         runtime.resizeModeZoomLabel = stringResource(Res.string.compose_player_resize_zoom)
@@ -136,10 +147,35 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
             (runtime.playbackSnapshot.isPlaying ||
                 (runtime.shouldPlay && runtime.playbackSnapshot.isLoading))
         EnterImmersivePlayerMode(keepScreenAwake = keepScreenAwake)
-        ManagePlayerPictureInPicture(
+        runtime.pictureInPictureController = ManagePlayerPictureInPicture(
             isPlaying = runtime.playbackSnapshot.isPlaying,
             playerSize = runtime.layoutSize,
         )
+        runtime.fullscreenController = LocalPlayerFullscreenController.current
+
+        // Ask a custom window chrome (the Windows title bar) to auto-hide while the player is open
+        // so the video is unobstructed; it reappears when the pointer returns to the top edge.
+        val windowChromeImmersiveRequest = LocalWindowChromeImmersiveRequest.current
+        DisposableEffect(windowChromeImmersiveRequest) {
+            windowChromeImmersiveRequest?.invoke(true)
+            onDispose { windowChromeImmersiveRequest?.invoke(false) }
+        }
+
+        val fullscreenController = runtime.fullscreenController
+        if (fullscreenController != null) {
+            DisposableEffect(fullscreenController) {
+                val wasFullscreenOnEntry = fullscreenController.isFullscreen
+                onDispose {
+                    if (fullscreenController.isFullscreen != wasFullscreenOnEntry) {
+                        fullscreenController.toggle()
+                    }
+                }
+            }
+        }
+
+        runtime.castController = rememberCastController()
+        runtime.BindCastEffects()
+
         runtime.BindPlayerRuntimeEffects()
         runtime.RenderPlayerRuntimeUi()
     }

@@ -10,6 +10,10 @@ actual object AppUpdaterPlatform {
 
     actual fun getSupportedAbis(): List<String> = emptyList()
 
+    actual fun getAssetFileExtensions(): List<String> = emptyList()
+
+    actual fun getDistributionFlavor(): String = ""
+
     actual fun getIgnoredTag(): String? = null
 
     actual fun setIgnoredTag(tag: String?) = Unit

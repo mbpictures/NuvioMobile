@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -80,22 +81,30 @@ fun <T> NuvioShelfSection(
                 viewAllPillSize = viewAllPillSize,
             )
         }
-        LazyRow(
-            contentPadding = rowContentPadding,
-            horizontalArrangement = Arrangement.spacedBy(itemSpacing),
-        ) {
-            if (key != null) {
-                items(
-                    items = entries.withDuplicateSafeLazyKeys(key),
-                    key = { entry -> entry.lazyKey },
-                ) { keyedEntry ->
-                    itemContent(keyedEntry.value)
-                }
-            } else {
-                items(entries) { entry ->
-                    itemContent(entry)
+        val rowState = rememberLazyListState()
+        Box(modifier = Modifier.fillMaxWidth()) {
+            LazyRow(
+                state = rowState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .nuvioHorizontalDragScroll(rowState),
+                contentPadding = rowContentPadding,
+                horizontalArrangement = Arrangement.spacedBy(itemSpacing),
+            ) {
+                if (key != null) {
+                    items(
+                        items = entries.withDuplicateSafeLazyKeys(key),
+                        key = { entry -> entry.lazyKey },
+                    ) { keyedEntry ->
+                        itemContent(keyedEntry.value)
+                    }
+                } else {
+                    items(entries) { entry ->
+                        itemContent(entry)
+                    }
                 }
             }
+            NuvioShelfRowChevrons(state = rowState, edgePadding = headerHorizontalPadding)
         }
     }
 }
@@ -111,6 +120,7 @@ fun NuvioPosterCard(
     bottomLeftLogoUrl: String? = null,
     bottomLeftText: String? = null,
     isWatched: Boolean = false,
+    isSaved: Boolean = false,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
@@ -185,6 +195,12 @@ fun NuvioPosterCard(
             }
 
             NuvioPosterWatchedOverlay(isWatched = isWatched)
+            NuvioAnimatedBookmarkedBadge(
+                isVisible = isSaved,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp),
+            )
         }
         if (shouldShowTitleBelow) {
             Text(
@@ -340,10 +356,11 @@ internal fun Modifier.posterCardClickable(
     onLongClick: (() -> Unit)?,
 ): Modifier =
     if (onClick != null || onLongClick != null) {
-        combinedClickable(
-            onClick = { onClick?.invoke() },
-            onLongClick = onLongClick,
-        )
+        nuvioSecondaryClick(onLongClick)
+            .combinedClickable(
+                onClick = { onClick?.invoke() },
+                onLongClick = onLongClick,
+            )
     } else {
         this
     }

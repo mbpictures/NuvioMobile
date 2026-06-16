@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
 import coil3.compose.AsyncImage
 import com.nuvio.app.features.details.MetaDetails
+import com.nuvio.app.features.home.components.homeHeroLayout
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -55,6 +56,7 @@ fun DetailHero(
     meta: MetaDetails,
     isTablet: Boolean = false,
     scrollOffset: Int = 0,
+    viewportHeight: Dp? = null,
     contentMaxWidth: Dp = 560.dp,
     onHeightChanged: (Int) -> Unit = {},
     heroTrailerSourceUrl: String? = null,
@@ -71,7 +73,10 @@ fun DetailHero(
     BoxWithConstraints(
         modifier = modifier.fillMaxWidth(),
     ) {
-        val heroHeight = detailHeroHeight(maxWidth, isTablet)
+        val heroHeight = homeHeroLayout(
+            maxWidthDp = maxWidth.value,
+            viewportHeightDp = viewportHeight?.value,
+        ).heroHeight
         val trailerAlpha by animateFloatAsState(
             targetValue = if (heroTrailerReady) 1f else 0f,
             animationSpec = tween(durationMillis = 300),
@@ -228,7 +233,7 @@ fun DetailHero(
                     if (meta.genres.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = meta.genres.take(3).joinToString(" \u2022 "),
+                            text = meta.genres.take(3).joinToString(" • "),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
@@ -239,10 +244,3 @@ fun DetailHero(
         }
     }
 }
-
-private fun detailHeroHeight(maxWidth: Dp, isTablet: Boolean): Dp =
-    if (!isTablet) {
-        (maxWidth * 1.33f).coerceIn(420.dp, 760.dp)
-    } else {
-        (maxWidth * 0.42f).coerceIn(300.dp, 420.dp)
-    }

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.AppIconResource
 import com.nuvio.app.core.ui.appIconPainter
+import com.nuvio.app.core.ui.nuvioSecondaryClick
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_play
 import nuvio.composeapp.generated.resources.details_actions_menu_label
@@ -61,6 +62,7 @@ fun DetailActionButtons(
     secondaryActions: List<DetailSecondaryAction> = emptyList(),
     actionsMenuLabel: String = stringResource(Res.string.details_actions_menu_label),
     isTablet: Boolean = false,
+    showPlayButton: Boolean = true,
     onPlayClick: () -> Unit = {},
     onPlayLongClick: (() -> Unit)? = null,
 ) {
@@ -90,49 +92,54 @@ fun DetailActionButtons(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(buttonHeight),
-                shape = playShape,
-                color = MaterialTheme.colorScheme.onBackground,
-                contentColor = MaterialTheme.colorScheme.background,
-            ) {
-                Row(
+            if (showPlayButton) {
+                Surface(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .combinedClickable(
-                            onClick = {
-                                onPlayClick()
-                            },
-                            onLongClick = onPlayLongClick,
-                            role = Role.Button,
-                        )
+                        .weight(1f)
                         .height(buttonHeight),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
+                    shape = playShape,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    contentColor = MaterialTheme.colorScheme.background,
                 ) {
-                    Icon(
-                        painter = playPainter,
-                        contentDescription = null,
-                        modifier = Modifier.size(if (isTablet) 20.dp else 18.dp),
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = playLabel,
-                        style = if (isTablet) {
-                            MaterialTheme.typography.titleMedium
-                        } else {
-                            MaterialTheme.typography.titleSmall
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .nuvioSecondaryClick(onPlayLongClick)
+                            .combinedClickable(
+                                onClick = {
+                                    onPlayClick()
+                                },
+                                onLongClick = onPlayLongClick,
+                                role = Role.Button,
+                            )
+                            .height(buttonHeight),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            painter = playPainter,
+                            contentDescription = null,
+                            modifier = Modifier.size(if (isTablet) 20.dp else 18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = playLabel,
+                            style = if (isTablet) {
+                                MaterialTheme.typography.titleMedium
+                            } else {
+                                MaterialTheme.typography.titleSmall
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
 
             if (hasSecondaryActions) {
-                Spacer(modifier = Modifier.width(12.dp))
+                if (showPlayButton) {
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
                 secondaryActions.forEachIndexed { index, action ->
                     Box(
                         modifier = Modifier
@@ -246,6 +253,7 @@ private fun DetailIconAction(
         Box(
             modifier = Modifier
                 .size(size)
+                .nuvioSecondaryClick(onLongClick)
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,

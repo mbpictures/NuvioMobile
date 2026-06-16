@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.ui.LocalWindowChromeTopInset
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.nuvioTypeScale
 import nuvio.composeapp.generated.resources.Res
@@ -158,9 +159,10 @@ internal fun OpeningOverlay(
         NuvioBackButton(
             onClick = onBack,
             modifier = Modifier
-                .align(Alignment.TopEnd)
+                .align(Alignment.TopStart)
                 .windowInsetsPadding(WindowInsets.safeContent.only(WindowInsetsSides.Top))
-                .padding(top = 20.dp, start = horizontalSafePadding, end = horizontalSafePadding + 20.dp)
+                .padding(top = LocalWindowChromeTopInset.current)
+                .padding(top = 20.dp, start = horizontalSafePadding + 20.dp, end = horizontalSafePadding)
                 ,
             containerColor = Color.Black.copy(alpha = 0.3f),
             contentColor = Color.White,

@@ -41,7 +41,7 @@ internal fun Modifier.playerSurfaceTapGestures(
 internal fun Modifier.playerSurfaceDragGestures(
     gestureController: PlayerGestureController?,
     layoutSize: IntSize,
-    sideGestureSystemEdgeExclusionPx: Float,
+    systemGestureEdges: PlayerSystemGestureEdges,
     playerControlsLockedState: State<Boolean>,
     touchGesturesEnabledState: State<Boolean>,
     isHoldToSpeedGestureActiveState: State<Boolean>,
@@ -55,7 +55,7 @@ internal fun Modifier.playerSurfaceDragGestures(
     revealLockedOverlayState: State<() -> Unit>,
     commitHorizontalSeekState: State<(Long) -> Unit>,
 ): Modifier =
-    pointerInput(gestureController, layoutSize, sideGestureSystemEdgeExclusionPx) {
+    pointerInput(gestureController, layoutSize, systemGestureEdges) {
         awaitEachGesture {
             val down = awaitFirstDown()
             if (playerControlsLockedState.value) {
@@ -73,13 +73,15 @@ internal fun Modifier.playerSurfaceDragGestures(
             val controller = gestureController
             val width = size.width.toFloat().takeIf { it > 0f } ?: return@awaitEachGesture
             val height = size.height.toFloat().takeIf { it > 0f } ?: return@awaitEachGesture
-            val sideGestureEdgeExclusionPx = sideGestureSystemEdgeExclusionPx
-                .coerceAtMost(height * 0.25f)
-            val isInSideGestureSystemEdge =
-                down.position.y <= sideGestureEdgeExclusionPx ||
-                    down.position.y >= height - sideGestureEdgeExclusionPx
+            if (
+                down.position.x < systemGestureEdges.leftPx ||
+                down.position.x > width - systemGestureEdges.rightPx ||
+                down.position.y < systemGestureEdges.topPx ||
+                down.position.y > height - systemGestureEdges.bottomPx
+            ) {
+                return@awaitEachGesture
+            }
             val region = when {
-                isInSideGestureSystemEdge -> null
                 down.position.x < width * PlayerLeftGestureBoundary -> PlayerSideGesture.Brightness
                 down.position.x > width * PlayerRightGestureBoundary -> PlayerSideGesture.Volume
                 else -> null

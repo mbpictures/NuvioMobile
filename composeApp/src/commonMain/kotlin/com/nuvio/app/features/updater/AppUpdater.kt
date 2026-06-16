@@ -54,10 +54,17 @@ import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
-private const val gitHubOwner = "NuvioMedia"
+private const val gitHubOwner = "mbpictures"
 private const val gitHubRepo = "NuvioMobile"
 private const val gitHubApiBase = "https://api.github.com"
-private const val releaseChannelBranch = "cmp-rewrite"
+private const val releaseChannelBranch = "fork-main"
+
+// The release workflow wraps the auto-generated changelog between these markers
+// inside a collapsible <details> block. We extract just that section so the
+// in-app updater can show a clean changelog instead of the full markdown body
+// (download tables, HTML tags, etc.). Keep in sync with .github/workflows/release.yml.
+private const val changelogStartMarker = "<!-- nuvio:changelog:start -->"
+private const val changelogEndMarker = "<!-- nuvio:changelog:end -->"
 
 data class AppUpdate(
     val tag: String,
@@ -170,18 +177,42 @@ private object AppUpdaterRepository {
             ?: release.name?.takeIf { it.isNotBlank() }
             ?: error(getString(Res.string.updates_release_missing_title))
 
-        val asset = chooseBestApkAsset(release.assets)
+        val asset = chooseBestAsset(release.assets)
             ?: error(getString(Res.string.updates_apk_asset_missing))
 
         AppUpdate(
             tag = tag,
             title = release.name?.takeIf { it.isNotBlank() } ?: tag,
-            notes = release.body.orEmpty(),
+            notes = extractChangelog(release.body),
             releaseUrl = release.htmlUrl,
             assetName = asset.name,
             assetUrl = asset.browserDownloadUrl,
             assetSizeBytes = asset.size,
         )
+    }
+
+    /**
+     * Pulls the changelog out of the release body. The release workflow emits a
+     * collapsible block whose changelog lines are fenced by [changelogStartMarker]
+     * and [changelogEndMarker]. When present we return just those lines so the
+     * dialog shows a clean changelog; otherwise we fall back to the full body.
+     */
+    private fun extractChangelog(body: String?): String {
+        val raw = body.orEmpty()
+        if (raw.isBlank()) return ""
+
+        val start = raw.indexOf(changelogStartMarker)
+        if (start < 0) return raw.trim()
+
+        val contentStart = start + changelogStartMarker.length
+        val end = raw.indexOf(changelogEndMarker, startIndex = contentStart)
+        val content = if (end < 0) {
+            raw.substring(contentStart)
+        } else {
+            raw.substring(contentStart, end)
+        }
+
+        return content.trim().ifBlank { raw.trim() }
     }
 
     private fun GitHubReleaseDto.matchesRequestedChannel(): Boolean {
@@ -195,27 +226,84 @@ private object AppUpdaterRepository {
             .any { value -> value.contains(channel, ignoreCase = true) }
     }
 
-    private fun chooseBestApkAsset(assets: List<GitHubAssetDto>): GitHubAssetDto? {
-        val apkAssets = assets.filter { asset ->
-            asset.name.endsWith(".apk", ignoreCase = true) ||
-                asset.contentType == "application/vnd.android.package-archive"
+    /**
+     * Picks the release asset to install for the current platform. Extensions
+     * are tried in the priority order [AppUpdaterPlatform.getAssetFileExtensions]
+     * returns them (e.g. prefer `.msi` over `.exe` on Windows): the first
+     * extension with any matching asset wins, then the group is narrowed by
+     * distribution flavor / ABI (which only matters on Android).
+     */
+    private fun chooseBestAsset(assets: List<GitHubAssetDto>): GitHubAssetDto? {
+        val extensions = AppUpdaterPlatform.getAssetFileExtensions()
+        if (extensions.isEmpty()) return null
+
+        for (extension in extensions) {
+            val matches = assets.filter { asset -> assetMatchesExtension(asset, extension) }
+            if (matches.isNotEmpty()) {
+                return selectByFlavorAndAbi(matches)
+            }
         }
-        if (apkAssets.isEmpty()) return null
-        if (apkAssets.size == 1) return apkAssets.first()
+        return null
+    }
+
+    private fun assetMatchesExtension(asset: GitHubAssetDto, extension: String): Boolean {
+        if (asset.name.endsWith(".$extension", ignoreCase = true)) return true
+        // Defensive fallback for APKs whose asset name omits the extension.
+        return extension.equals("apk", ignoreCase = true) &&
+            asset.contentType == "application/vnd.android.package-archive"
+    }
+
+    private fun selectByFlavorAndAbi(candidates: List<GitHubAssetDto>): GitHubAssetDto? {
+        if (candidates.isEmpty()) return null
+
+        val flavor = AppUpdaterPlatform.getDistributionFlavor()
+        val knownFlavors = listOf("full", "playstore")
+        val flavorFiltered = if (flavor.isNotBlank()) {
+            val matchingFlavor = candidates.filter { containsTokenIgnoreCase(it.name, flavor) }
+            if (matchingFlavor.isNotEmpty()) {
+                matchingFlavor
+            } else {
+                val otherFlavors = knownFlavors.filter { !it.equals(flavor, ignoreCase = true) }
+                candidates.filterNot { asset -> otherFlavors.any { other -> containsTokenIgnoreCase(asset.name, other) } }
+                    .ifEmpty { candidates }
+            }
+        } else {
+            candidates
+        }
+
+        if (flavorFiltered.size == 1) return flavorFiltered.first()
 
         val supportedAbis = AppUpdaterPlatform.getSupportedAbis()
         for (abi in supportedAbis) {
-            val candidate = apkAssets.firstOrNull { asset ->
-                asset.name.contains(abi, ignoreCase = true)
+            val candidate = flavorFiltered.firstOrNull { asset ->
+                containsTokenIgnoreCase(asset.name, abi)
             }
             if (candidate != null) return candidate
         }
 
-        return apkAssets.firstOrNull { asset ->
+        return flavorFiltered.firstOrNull { asset ->
             val name = asset.name.lowercase()
             name.contains("universal") || name.contains("all")
-        } ?: apkAssets.first()
+        } ?: flavorFiltered.first()
     }
+
+    private fun containsTokenIgnoreCase(name: String, token: String): Boolean {
+        if (token.isEmpty()) return false
+        val haystack = name.lowercase()
+        val needle = token.lowercase()
+        var fromIndex = 0
+        while (true) {
+            val index = haystack.indexOf(needle, startIndex = fromIndex)
+            if (index < 0) return false
+            val beforeOk = index == 0 || !isAbiNameChar(haystack[index - 1])
+            val end = index + needle.length
+            val afterOk = end >= haystack.length || !isAbiNameChar(haystack[end])
+            if (beforeOk && afterOk) return true
+            fromIndex = index + 1
+        }
+    }
+
+    private fun isAbiNameChar(c: Char): Boolean = c.isLetterOrDigit() || c == '_'
 }
 
 class AppUpdaterController internal constructor(

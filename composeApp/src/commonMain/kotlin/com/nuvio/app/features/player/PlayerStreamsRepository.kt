@@ -155,7 +155,10 @@ object PlayerStreamsRepository {
 
         setRequestKey(requestKey)
         jobHolder()?.cancel()
-        stateFlow.value = StreamsUiState()
+        stateFlow.value = StreamsUiState(
+            requestToken = requestKey,
+            isAnyLoading = true,
+        )
 
         val streamBadgeRules = StreamBadgeSettingsRepository.snapshot()
         val embeddedStreams = MetaDetailsRepository.findEmbeddedStreams(videoId)
@@ -172,6 +175,7 @@ object PlayerStreamsRepository {
                 rules = streamBadgeRules,
             ).firstOrNull() ?: group
             stateFlow.value = StreamsUiState(
+                requestToken = requestKey,
                 groups = listOf(presentedGroup),
                 activeAddonIds = setOf("embedded"),
                 isAnyLoading = false,
@@ -195,6 +199,7 @@ object PlayerStreamsRepository {
 
         if (installedAddons.isEmpty() && pluginProviderGroups.isEmpty()) {
             stateFlow.value = StreamsUiState(
+                requestToken = requestKey,
                 isAnyLoading = false,
                 emptyStateReason = com.nuvio.app.features.streams.StreamsEmptyStateReason.NoAddonsInstalled,
             )
@@ -221,6 +226,7 @@ object PlayerStreamsRepository {
 
         if (streamAddons.isEmpty() && pluginProviderGroups.isEmpty()) {
             stateFlow.value = StreamsUiState(
+                requestToken = requestKey,
                 isAnyLoading = false,
                 emptyStateReason = com.nuvio.app.features.streams.StreamsEmptyStateReason.NoCompatibleAddons,
             )
@@ -245,6 +251,7 @@ object PlayerStreamsRepository {
         }, installedAddonOrder)
         val isInitiallyLoading = initialGroups.any { it.isLoading }
         stateFlow.value = StreamsUiState(
+            requestToken = requestKey,
             groups = initialGroups,
             activeAddonIds = initialGroups.map { it.addonId }.toSet(),
             isAnyLoading = isInitiallyLoading,

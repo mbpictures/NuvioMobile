@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="https://github.com/tapframe/NuvioTV/blob/main/assets/brand/app_logo_wordmark.png" alt="Nuvio" width="300" />
+  <img src="./Docs/logo.png" alt="Logo" width="300" height="300" />
   <br />
   <br />
 
@@ -18,6 +18,10 @@
 
 </div>
 
+> **Unofficial Fork Notice**
+>
+> This is an unofficial fork of [NuvioMedia/NuvioMobile](https://github.com/NuvioMedia/NuvioMobile), maintained independently from the upstream project.
+
 ## About
 
 Nuvio is the current Kotlin Multiplatform rewrite of the original React Native app. It delivers a shared Compose UI for Android and iOS while keeping the playback-focused experience, collection tools, watch progress flows, downloads, and Stremio addon ecosystem integration that shaped the earlier app.
@@ -28,16 +32,16 @@ The mobile app is built from a single shared codebase in [composeApp](./composeA
 
 ### Android
 
-Download the latest Android build from [GitHub Releases](https://github.com/NuvioMedia/NuvioMobile/releases/latest).
+Download the latest Android build from [GitHub Releases](https://github.com/mbpictures/NuvioMobile/releases/latest).
 
 ### iOS
 
-- [TestFlight](https://testflight.apple.com/join/u4y7MHK9)
+Download the latest iOS build from [GitHub Releases](https://github.com/mbpictures/NuvioMobile/releases/latest) and sideload it to your device, e.g. by using [sidestore](https://sidestore.io/).
 
 ## Development
 
 ```bash
-git clone https://github.com/NuvioMedia/NuvioMobile.git
+git clone https://github.com/mbpictures/NuvioMobile.git
 cd NuvioMobile
 ./scripts/run-mobile.sh android
 # or
@@ -50,6 +54,7 @@ cd NuvioMobile
 - `composeApp/src/commonMain/` contains shared UI, features, repositories, and platform-agnostic logic.
 - `composeApp/src/androidMain/` contains Android-specific integrations.
 - `composeApp/src/iosMain/` contains iOS-specific integrations.
+- `composeApp/src/desktopMain/` contains desktop-specific integrations.
 - `iosApp/` contains the native Xcode project and iOS entry point.
 
 Useful commands:
@@ -80,22 +85,22 @@ For comprehensive legal information, including our full disclaimer, third-party 
 
 ## Star History
 
-<a href="https://www.star-history.com/#NuvioMedia/NuvioMobile&type=date&legend=top-left">
+<a href="https://www.star-history.com/#mbpictures/NuvioMobile&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=NuvioMedia/NuvioMobile&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=NuvioMedia/NuvioMobile&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=NuvioMedia/NuvioMobile&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=mbpictures/NuvioMobile&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=mbpictures/NuvioMobile&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=mbpictures/NuvioMobile&type=date&legend=top-left" />
  </picture>
 </a>
 
 <!-- MARKDOWN LINKS & IMAGES -->
-[contributors-shield]: https://img.shields.io/github/contributors/NuvioMedia/NuvioMobile.svg?style=for-the-badge
-[contributors-url]: https://github.com/NuvioMedia/NuvioMobile/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/NuvioMedia/NuvioMobile.svg?style=for-the-badge
-[forks-url]: https://github.com/NuvioMedia/NuvioMobile/network/members
-[stars-shield]: https://img.shields.io/github/stars/NuvioMedia/NuvioMobile.svg?style=for-the-badge
-[stars-url]: https://github.com/NuvioMedia/NuvioMobile/stargazers
-[issues-shield]: https://img.shields.io/github/issues/NuvioMedia/NuvioMobile.svg?style=for-the-badge
-[issues-url]: https://github.com/NuvioMedia/NuvioMobile/issues
-[license-shield]: https://img.shields.io/github/license/NuvioMedia/NuvioMobile.svg?style=for-the-badge
-[license-url]: https://github.com/NuvioMedia/NuvioMobile/blob/main/LICENSE
+[contributors-shield]: https://img.shields.io/github/contributors/mbpictures/NuvioMobile.svg?style=for-the-badge
+[contributors-url]: https://github.com/mbpictures/NuvioMobile/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/mbpictures/NuvioMobile.svg?style=for-the-badge
+[forks-url]: https://github.com/mbpictures/NuvioMobile/network/members
+[stars-shield]: https://img.shields.io/github/stars/mbpictures/NuvioMobile.svg?style=for-the-badge
+[stars-url]: https://github.com/mbpictures/NuvioMobile/stargazers
+[issues-shield]: https://img.shields.io/github/issues/mbpictures/NuvioMobile.svg?style=for-the-badge
+[issues-url]: https://github.com/mbpictures/NuvioMobile/issues
+[license-shield]: https://img.shields.io/github/license/mbpictures/NuvioMobile.svg?style=for-the-badge
+[license-url]: https://github.com/mbpictures/NuvioMobile/blob/main/LICENSE

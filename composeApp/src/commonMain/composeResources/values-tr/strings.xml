@@ -373,6 +373,7 @@
     <string name="compose_search_empty_no_search_catalogs_title">Aranabilir katalog yok</string>
     <string name="compose_search_placeholder">Film, dizi ara...</string>
     <string name="compose_search_recent_searches">Son aramalar</string>
+    <string name="compose_search_clear_recent_searches">Son aramaları temizle</string>
     <string name="compose_search_remove_recent_search">Son aramayı kaldır</string>
     <string name="compose_settings_category_about">Hakkında</string>
     <string name="compose_settings_category_general">Genel</string>
@@ -748,6 +749,7 @@
     <string name="settings_playback_decoder_prefer_app">Uygulamayı tercih et (FFmpeg)</string>
     <string name="settings_playback_decoder_prefer_device">Cihazı tercih et</string>
     <string name="settings_playback_decoder_priority">Çözücü önceliği</string>
+    <string name="player_decoder_fallback_toast">Donanım çözücü başarısız oldu. Bu akış için yazılım çözücüye geçiliyor.</string>
     <string name="settings_playback_dialog_close">Kapatmak için dışarı dokun</string>
     <string name="settings_playback_dialog_save_close">Kaydedip kapatmak için dışarı dokun</string>
     <string name="settings_playback_duration_day_one">%1$d gün</string>

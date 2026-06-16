@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.NuvioBackButton
+import com.nuvio.app.core.ui.nuvioStatusBarTopPadding
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.isIos
 import nuvio.composeapp.generated.resources.*
@@ -53,7 +54,7 @@ fun DetailFloatingHeader(
     onToggleSaved: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val safeAreaTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val safeAreaTop = nuvioStatusBarTopPadding()
     val headerTopPadding = (safeAreaTop - 6.dp).coerceAtLeast(safeAreaTop * 0.8f)
     val interactive = progress > 0.05f
     val surfaceColor = if (isIos) {

@@ -13,6 +13,7 @@ import com.nuvio.app.features.details.MetaScreenSettingsUiState
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.p2p.P2pSettingsUiState
 import com.nuvio.app.features.p2p.P2pStreamingState
+import com.nuvio.app.features.player.cast.CastController
 import com.nuvio.app.features.player.skip.NextEpisodeInfo
 import com.nuvio.app.features.player.skip.SkipInterval
 import com.nuvio.app.features.streams.StreamsUiState
@@ -78,7 +79,7 @@ internal class PlayerScreenRuntime(
     var metrics: PlayerLayoutMetrics = PlayerLayoutMetrics.fromWidth(0.dp)
     var sliderEdgePadding: Dp = 0.dp
     var overlayBottomPadding: Dp = 0.dp
-    var sideGestureSystemEdgeExclusionPx: Float = 0f
+    var systemGestureEdges: PlayerSystemGestureEdges = PlayerSystemGestureEdges()
     var resizeModeFitLabel: String = ""
     var resizeModeFillLabel: String = ""
     var resizeModeZoomLabel: String = ""
@@ -89,8 +90,12 @@ internal class PlayerScreenRuntime(
     var parentalGuideLabels: ParentalGuideLabels = ParentalGuideLabels("", "", "", "", "", "", "", "")
 
     var gestureController: PlayerGestureController? = null
+    var pictureInPictureController: PlayerPictureInPictureController? = null
+    var fullscreenController: PlayerFullscreenController? = null
+    var castController: CastController? = null
 
     var controlsVisible by mutableStateOf(true)
+    var showCastPicker by mutableStateOf(false)
     var playerControlsLocked by mutableStateOf(false)
     var activeSourceUrl by mutableStateOf(sourceUrl)
     var activeSourceAudioUrl by mutableStateOf(sourceAudioUrl)

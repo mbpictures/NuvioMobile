@@ -1,0 +1,887 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Prepare release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+      testflight_enabled: ${{ steps.testflight.outputs.enabled }}
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF##*/}"
+          version="${tag#v}"
+          if [[ "$version" == *-* ]]; then
+            is_prerelease=true
+          else
+            is_prerelease=false
+          fi
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "is_prerelease=$is_prerelease"
+          } >>"$GITHUB_OUTPUT"
+          echo "Tag: $tag (version: $version, prerelease: $is_prerelease)"
+
+      - name: Detect TestFlight credentials
+        id: testflight
+        env:
+          IOS_DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          IOS_DIST_CERT_P12_PASSWORD: ${{ secrets.IOS_DIST_CERT_P12_PASSWORD }}
+          IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in IOS_DIST_CERT_P12_BASE64 IOS_DIST_CERT_P12_PASSWORD IOS_KEYCHAIN_PASSWORD \
+                      APPSTORE_API_KEY_ID APPSTORE_API_ISSUER_ID APPSTORE_API_PRIVATE_KEY \
+                      APPLE_TEAM_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if [[ ${#missing[@]} -eq 0 ]]; then
+            echo "enabled=true" >>"$GITHUB_OUTPUT"
+            echo "TestFlight upload enabled: all required secrets are set."
+          else
+            echo "enabled=false" >>"$GITHUB_OUTPUT"
+            echo "::warning::Skipping TestFlight upload — missing secrets: ${missing[*]}"
+          fi
+
+  android:
+    name: Android release
+    runs-on: ubuntu-latest
+    needs: prepare
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Write runtime config to local.properties
+        uses: ./.github/actions/write-runtime-config
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          trakt-client-id: ${{ secrets.TRAKT_CLIENT_ID }}
+          trakt-client-secret: ${{ secrets.TRAKT_CLIENT_SECRET }}
+          trakt-redirect-uri: ${{ secrets.TRAKT_REDIRECT_URI }}
+          introdb-api-url: ${{ secrets.INTRODB_API_URL }}
+          imdb-ratings-api-base-url: ${{ secrets.IMDB_RATINGS_API_BASE_URL }}
+          imdb-tapframe-api-base-url: ${{ secrets.IMDB_TAPFRAME_API_BASE_URL }}
+          contributions-url: ${{ secrets.CONTRIBUTIONS_URL }}
+          donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
+          donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
+
+      - name: Configure Android release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.NUVIO_RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.NUVIO_RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.NUVIO_RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.NUVIO_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${KEYSTORE_BASE64:-}" ]]; then
+            keystore_path="$RUNNER_TEMP/nuvio-release.keystore"
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$keystore_path"
+            store_password="$KEYSTORE_PASSWORD"
+            key_alias="$KEY_ALIAS"
+            key_password="$KEY_PASSWORD"
+            echo "Using release keystore from secrets."
+          else
+            echo "::warning::Release signing secrets not set — generating an ephemeral debug-style keystore so the build can complete. APKs will not be installable over signed production builds."
+            keystore_path="$RUNNER_TEMP/nuvio-fallback.keystore"
+            store_password="android"
+            key_alias="androiddebugkey"
+            key_password="android"
+            keytool -genkeypair -v \
+              -keystore "$keystore_path" \
+              -storepass "$store_password" \
+              -keypass "$key_password" \
+              -alias "$key_alias" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          {
+            echo ""
+            echo "NUVIO_RELEASE_STORE_FILE=$keystore_path"
+            echo "NUVIO_RELEASE_STORE_PASSWORD=$store_password"
+            echo "NUVIO_RELEASE_KEY_ALIAS=$key_alias"
+            echo "NUVIO_RELEASE_KEY_PASSWORD=$key_password"
+          } >> local.properties
+
+      - name: Build per-ABI release APKs (full + playstore)
+        run: |
+          ./gradlew \
+            :composeApp:assembleFullRelease \
+            :composeApp:assemblePlaystoreRelease \
+            -Pnuvio.splitAbi=true \
+            --stacktrace
+
+      - name: Stage and rename APK artifacts
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          for flavor in full playstore; do
+            for abi in arm64-v8a armeabi-v7a x86_64; do
+              src=$(ls "composeApp/build/outputs/apk/${flavor}/release/composeApp-${flavor}-${abi}-release"*.apk 2>/dev/null | head -n1 || true)
+              if [[ -z "$src" ]]; then
+                echo "::error::Missing APK for ${flavor}/${abi}"
+                ls -la "composeApp/build/outputs/apk/${flavor}/release/" || true
+                exit 1
+              fi
+              dest="artifacts/Nuvio-${VERSION}-android-${flavor}-${abi}.apk"
+              cp "$src" "$dest"
+              echo "  $src -> $dest"
+            done
+          done
+          ls -la artifacts/
+
+      - name: Upload Android APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apks
+          path: artifacts/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  ios:
+    name: iOS release
+    runs-on: macos-15
+    needs: prepare
+    timeout-minutes: 90
+    env:
+      NUVIO_IOS_DISTRIBUTION: full
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Write runtime config to local.properties
+        uses: ./.github/actions/write-runtime-config
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          trakt-client-id: ${{ secrets.TRAKT_CLIENT_ID }}
+          trakt-client-secret: ${{ secrets.TRAKT_CLIENT_SECRET }}
+          trakt-redirect-uri: ${{ secrets.TRAKT_REDIRECT_URI }}
+          introdb-api-url: ${{ secrets.INTRODB_API_URL }}
+          imdb-ratings-api-base-url: ${{ secrets.IMDB_RATINGS_API_BASE_URL }}
+          imdb-tapframe-api-base-url: ${{ secrets.IMDB_TAPFRAME_API_BASE_URL }}
+          contributions-url: ${{ secrets.CONTRIBUTIONS_URL }}
+          donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
+          donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
+
+      # The Release Kotlin/Native link of the iOS framework regularly needs
+      # 8–10 GB of heap (Compose + Ktor + Supabase). Override at the user
+      # level so we don't have to raise the project default for local devs.
+      - name: Raise Gradle heap for Kotlin/Native release link
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.gradle"
+          cat >> "$HOME/.gradle/gradle.properties" <<'EOF'
+          org.gradle.jvmargs=-Xmx10g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=1g
+          kotlin.daemon.jvmargs=-Xmx4g
+          EOF
+          # Make sure no stale daemon is hanging around with the old args.
+          ./gradlew --stop || true
+
+      - name: Install CocoaPods dependencies
+        working-directory: iosApp
+        run: pod install
+
+      - name: Archive iOS app (Release, unsigned)
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace iosApp/iosApp.xcworkspace \
+            -scheme iosApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Nuvio.xcarchive \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            archive
+
+      - name: Repackage .app into unsigned .ipa
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts build/Payload
+          app_path="build/Nuvio.xcarchive/Products/Applications/Nuvio.app"
+          if [[ ! -d "$app_path" ]]; then
+            echo "::error::Built .app not found at $app_path"
+            ls -laR build/Nuvio.xcarchive || true
+            exit 1
+          fi
+          cp -R "$app_path" build/Payload/
+          ipa_name="Nuvio-${VERSION}-ios.ipa"
+          (
+            cd build
+            zip -ry "$ipa_name" Payload >/dev/null
+          )
+          mv "build/$ipa_name" "artifacts/$ipa_name"
+          ls -la artifacts/
+
+      - name: Upload iOS IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: artifacts/*.ipa
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Pack Kotlin/Native build outputs for downstream reuse
+        if: needs.prepare.outputs.testflight_enabled == 'true'
+        run: |
+          set -euo pipefail
+          tar -cf "$RUNNER_TEMP/composeApp-build-ios.tar" \
+            composeApp/build \
+            .gradle
+
+      - name: Upload Kotlin/Native build outputs
+        if: needs.prepare.outputs.testflight_enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: composeApp-build-ios
+          path: ${{ runner.temp }}/composeApp-build-ios.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  windows:
+    name: Windows desktop release
+    runs-on: windows-latest
+    needs: prepare
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Write runtime config to local.properties
+        uses: ./.github/actions/write-runtime-config
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          trakt-client-id: ${{ secrets.TRAKT_CLIENT_ID }}
+          trakt-client-secret: ${{ secrets.TRAKT_CLIENT_SECRET }}
+          trakt-redirect-uri: ${{ secrets.TRAKT_REDIRECT_URI }}
+          introdb-api-url: ${{ secrets.INTRODB_API_URL }}
+          imdb-ratings-api-base-url: ${{ secrets.IMDB_RATINGS_API_BASE_URL }}
+          imdb-tapframe-api-base-url: ${{ secrets.IMDB_TAPFRAME_API_BASE_URL }}
+          contributions-url: ${{ secrets.CONTRIBUTIONS_URL }}
+          donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
+          donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
+
+      - name: Build Windows installers (MSI + EXE)
+        run: |
+          ./gradlew.bat \
+            :composeApp:packageReleaseMsi \
+            :composeApp:packageReleaseExe \
+            --stacktrace
+
+      - name: Stage and rename Windows artifacts
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          for ext in msi exe; do
+            src="composeApp/build/compose/binaries/main-release/${ext}/Nuvio-${VERSION}.${ext}"
+            if [[ ! -f "$src" ]]; then
+              echo "::error::Missing Windows ${ext} artifact at $src"
+              ls -la "composeApp/build/compose/binaries/main-release/${ext}/" || true
+              exit 1
+            fi
+            dest="artifacts/Nuvio-${VERSION}-windows.${ext}"
+            cp "$src" "$dest"
+            echo "  $src -> $dest"
+          done
+          ls -la artifacts/
+
+      - name: Upload Windows installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: |
+            artifacts/*.msi
+            artifacts/*.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    name: macOS desktop release
+    runs-on: macos-15
+    needs: prepare
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Write runtime config to local.properties
+        uses: ./.github/actions/write-runtime-config
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          trakt-client-id: ${{ secrets.TRAKT_CLIENT_ID }}
+          trakt-client-secret: ${{ secrets.TRAKT_CLIENT_SECRET }}
+          trakt-redirect-uri: ${{ secrets.TRAKT_REDIRECT_URI }}
+          introdb-api-url: ${{ secrets.INTRODB_API_URL }}
+          imdb-ratings-api-base-url: ${{ secrets.IMDB_RATINGS_API_BASE_URL }}
+          imdb-tapframe-api-base-url: ${{ secrets.IMDB_TAPFRAME_API_BASE_URL }}
+          contributions-url: ${{ secrets.CONTRIBUTIONS_URL }}
+          donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
+          donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
+
+      - name: Build macOS installer (DMG)
+        run: |
+          ./gradlew \
+            :composeApp:packageReleaseDmg \
+            --stacktrace
+
+      - name: Stage and rename macOS artifact
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          src="composeApp/build/compose/binaries/main-release/dmg/Nuvio-${VERSION}.dmg"
+          if [[ ! -f "$src" ]]; then
+            echo "::error::Missing macOS dmg artifact at $src"
+            ls -la "composeApp/build/compose/binaries/main-release/dmg/" || true
+            exit 1
+          fi
+          dest="artifacts/Nuvio-${VERSION}-macos.dmg"
+          cp "$src" "$dest"
+          echo "  $src -> $dest"
+          ls -la artifacts/
+
+      - name: Upload macOS installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: artifacts/*.dmg
+          if-no-files-found: error
+          retention-days: 7
+
+  linux:
+    name: Linux desktop release
+    runs-on: ubuntu-latest
+    needs: prepare
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Linux packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot binutils
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Write runtime config to local.properties
+        uses: ./.github/actions/write-runtime-config
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          trakt-client-id: ${{ secrets.TRAKT_CLIENT_ID }}
+          trakt-client-secret: ${{ secrets.TRAKT_CLIENT_SECRET }}
+          trakt-redirect-uri: ${{ secrets.TRAKT_REDIRECT_URI }}
+          introdb-api-url: ${{ secrets.INTRODB_API_URL }}
+          imdb-ratings-api-base-url: ${{ secrets.IMDB_RATINGS_API_BASE_URL }}
+          imdb-tapframe-api-base-url: ${{ secrets.IMDB_TAPFRAME_API_BASE_URL }}
+          contributions-url: ${{ secrets.CONTRIBUTIONS_URL }}
+          donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
+          donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
+
+      # Bundle libmpv (and its ffmpeg/libass closure) into the package so playback works without
+      # the user installing libmpv system-wide, mirroring the Windows/macOS self-contained builds.
+      - name: Build Linux installer (DEB, self-contained with libmpv)
+        run: |
+          ./gradlew \
+            :composeApp:packageReleaseDeb \
+            -Pnuvio.desktop.embedMpvLinux=true \
+            --stacktrace
+
+      - name: Stage and rename Linux artifact
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          # jpackage emits a lowercase, Debian-style name (e.g. nuvio_1.2.3_amd64.deb), so glob it.
+          src=$(ls composeApp/build/compose/binaries/main-release/deb/*.deb 2>/dev/null | head -n1 || true)
+          if [[ -z "$src" ]]; then
+            echo "::error::Missing Linux deb artifact"
+            ls -la composeApp/build/compose/binaries/main-release/deb/ || true
+            exit 1
+          fi
+          dest="artifacts/Nuvio-${VERSION}-linux.deb"
+          cp "$src" "$dest"
+          echo "  $src -> $dest"
+          ls -la artifacts/
+
+      - name: Upload Linux installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-installer
+          path: artifacts/*.deb
+          if-no-files-found: error
+          retention-days: 7
+
+  ios-testflight:
+    name: iOS TestFlight upload
+    runs-on: macos-15
+    needs: [prepare, ios]
+    if: needs.prepare.outputs.testflight_enabled == 'true'
+    timeout-minutes: 90
+    env:
+      NUVIO_IOS_DISTRIBUTION: full
+      ARCHIVE_PATH: build/Nuvio-AppStore.xcarchive
+      EXPORT_PATH: build/AppStore-export
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Write runtime config to local.properties
+        uses: ./.github/actions/write-runtime-config
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          trakt-client-id: ${{ secrets.TRAKT_CLIENT_ID }}
+          trakt-client-secret: ${{ secrets.TRAKT_CLIENT_SECRET }}
+          trakt-redirect-uri: ${{ secrets.TRAKT_REDIRECT_URI }}
+          introdb-api-url: ${{ secrets.INTRODB_API_URL }}
+          imdb-ratings-api-base-url: ${{ secrets.IMDB_RATINGS_API_BASE_URL }}
+          imdb-tapframe-api-base-url: ${{ secrets.IMDB_TAPFRAME_API_BASE_URL }}
+          contributions-url: ${{ secrets.CONTRIBUTIONS_URL }}
+          donations-base-url: ${{ secrets.DONATIONS_BASE_URL }}
+          donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
+
+      - name: Raise Gradle heap for Kotlin/Native release link
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.gradle"
+          cat >> "$HOME/.gradle/gradle.properties" <<'EOF'
+          org.gradle.jvmargs=-Xmx10g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=1g
+          kotlin.daemon.jvmargs=-Xmx4g
+          EOF
+          ./gradlew --stop || true
+
+      - name: Download Kotlin/Native build outputs from ios job
+        uses: actions/download-artifact@v4
+        with:
+          name: composeApp-build-ios
+          path: ${{ runner.temp }}
+
+      - name: Restore Kotlin/Native build outputs
+        run: |
+          set -euo pipefail
+          tar -xf "$RUNNER_TEMP/composeApp-build-ios.tar"
+          rm -f "$RUNNER_TEMP/composeApp-build-ios.tar"
+
+      - name: Import Apple Distribution certificate
+        env:
+          DIST_CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          DIST_CERT_P12_PASSWORD: ${{ secrets.IOS_DIST_CERT_P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${DIST_CERT_P12_BASE64:-}" || -z "${DIST_CERT_P12_PASSWORD:-}" || -z "${KEYCHAIN_PASSWORD:-}" ]]; then
+            echo "::error::Missing iOS signing secrets (IOS_DIST_CERT_P12_BASE64 / IOS_DIST_CERT_P12_PASSWORD / IOS_KEYCHAIN_PASSWORD)."
+            exit 1
+          fi
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          CERT_PATH="$RUNNER_TEMP/dist-cert.p12"
+          printf '%s' "$DIST_CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$DIST_CERT_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychain -d user | tr -d '"')
+          rm -f "$CERT_PATH"
+
+      - name: Install App Store Connect API key
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APPSTORE_API_KEY_ID:-}" || -z "${APPSTORE_API_ISSUER_ID:-}" || -z "${APPSTORE_API_PRIVATE_KEY:-}" ]]; then
+            echo "::error::Missing App Store Connect API secrets (APPSTORE_API_KEY_ID / APPSTORE_API_ISSUER_ID / APPSTORE_API_PRIVATE_KEY)."
+            exit 1
+          fi
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          key_file="$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+          printf '%s\n' "$APPSTORE_API_PRIVATE_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          # Also expose a copy at a stable path for xcodebuild -authenticationKeyPath.
+          cp "$key_file" "$RUNNER_TEMP/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+
+      - name: Install CocoaPods dependencies
+        working-directory: iosApp
+        run: pod install
+
+      - name: Archive iOS app (Release, signed for App Store)
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace iosApp/iosApp.xcworkspace \
+            -scheme iosApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            -allowProvisioningUpdates \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID" \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey_${APPSTORE_API_KEY_ID}.p8" \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            archive
+
+      - name: Write ExportOptions.plist
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          cat > build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>destination</key>
+            <string>export</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>stripSwiftSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Export signed IPA
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportOptionsPlist build/ExportOptions.plist \
+            -exportPath "$EXPORT_PATH" \
+            -allowProvisioningUpdates \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID" \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+          ls -la "$EXPORT_PATH"
+
+      - name: Upload build to TestFlight
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          ipa=$(ls "$EXPORT_PATH"/*.ipa | head -n1)
+          if [[ -z "$ipa" ]]; then
+            echo "::error::No .ipa produced by xcodebuild -exportArchive"
+            exit 1
+          fi
+          echo "Uploading $ipa to TestFlight..."
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$ipa" \
+            --apiKey "$APPSTORE_API_KEY_ID" \
+            --apiIssuer "$APPSTORE_API_ISSUER_ID"
+
+      - name: Cleanup signing material
+        if: always()
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+        run: |
+          set +e
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db"
+          rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+          rm -f "$RUNNER_TEMP/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+          true
+
+  release:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    needs: [prepare, android, ios, windows, macos, linux]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (full history for changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apks
+          path: release-assets/
+
+      - name: Download iOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-ipa
+          path: release-assets/
+
+      - name: Download Windows installers
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installers
+          path: release-assets/
+
+      - name: Download macOS installer
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-installer
+          path: release-assets/
+
+      - name: Download Linux installer
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-installer
+          path: release-assets/
+
+      - name: List release assets
+        run: ls -la release-assets/
+
+      - name: Compose release notes
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/${REPO}/releases/download/${TAG}"
+          link() {
+            local file="$1"
+            local label="$2"
+            if [[ -f "release-assets/$file" ]]; then
+              printf '[%s](%s/%s)' "$label" "$base" "$file"
+            else
+              printf '—'
+            fi
+          }
+
+          # Build the changelog from the git commits between the previous tag
+          # and this one. The previous tag is the most recent tag reachable
+          # from the commit just before this release tag.
+          prev_tag="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+          if [[ -n "$prev_tag" ]]; then
+            commit_range="${prev_tag}..${TAG}"
+            range_label="$prev_tag"
+          else
+            commit_range="${TAG}"
+            range_label="the first commit"
+          fi
+          changelog="$(git log "$commit_range" --first-parent --pretty=format:'- %s (%h)' 2>/dev/null || true)"
+          if [[ -z "$changelog" ]]; then
+            changelog="- No code changes recorded for this release."
+          fi
+          echo "--- changelog (${commit_range}) ---"
+          echo "$changelog"
+
+          {
+            echo "## Nuvio ${VERSION}"
+            echo
+            echo "### Mobile downloads"
+            echo
+            echo "| Architecture | Android (Full) | Android (Play Store) | iOS |"
+            echo "| --- | --- | --- | --- |"
+            printf '| arm64 | %s | %s | %s |\n' \
+              "$(link "Nuvio-${VERSION}-android-full-arm64-v8a.apk" "APK")" \
+              "$(link "Nuvio-${VERSION}-android-playstore-arm64-v8a.apk" "APK")" \
+              "$(link "Nuvio-${VERSION}-ios.ipa" "IPA")"
+            printf '| armeabi-v7a | %s | %s | — |\n' \
+              "$(link "Nuvio-${VERSION}-android-full-armeabi-v7a.apk" "APK")" \
+              "$(link "Nuvio-${VERSION}-android-playstore-armeabi-v7a.apk" "APK")"
+            printf '| x86_64 | %s | %s | — |\n' \
+              "$(link "Nuvio-${VERSION}-android-full-x86_64.apk" "APK")" \
+              "$(link "Nuvio-${VERSION}-android-playstore-x86_64.apk" "APK")"
+            echo
+            echo "### Desktop downloads"
+            echo
+            echo "| Platform | Installer |"
+            echo "| --- | --- |"
+            printf '| Windows | %s &nbsp;/&nbsp; %s |\n' \
+              "$(link "Nuvio-${VERSION}-windows.msi" "MSI")" \
+              "$(link "Nuvio-${VERSION}-windows.exe" "EXE")"
+            printf '| macOS | %s |\n' \
+              "$(link "Nuvio-${VERSION}-macos.dmg" "DMG")"
+            printf '| Linux | %s |\n' \
+              "$(link "Nuvio-${VERSION}-linux.deb" "DEB")"
+            echo
+            echo "### Changelog"
+            echo
+            echo "<details>"
+            echo "<summary>Changes since ${range_label}</summary>"
+            echo
+            echo "<!-- nuvio:changelog:start -->"
+            echo "$changelog"
+            echo "<!-- nuvio:changelog:end -->"
+            echo
+            echo "</details>"
+            echo
+            echo "### Notes"
+            echo
+            echo "- **Android (Full)** is the sideload-distribution flavor with the full feature set. **Android (Play Store)** matches the Play Store-distribution flavor."
+            echo "- The iOS .ipa is **unsigned** — install with AltStore, Sideloadly, or another sideloading tool."
+            echo "- The Windows MSI and EXE and the macOS DMG are unsigned. Windows SmartScreen / macOS Gatekeeper may warn on first launch — bypass per OS instructions."
+            echo "- The Linux .deb targets Debian/Ubuntu (x86_64): install with \`sudo apt install ./Nuvio-${VERSION}-linux.deb\`. It bundles libmpv and needs a libstdc++ from Ubuntu 22.04+ (older hosts fall back to a system-installed libmpv)."
+          } > release-notes.md
+          echo "--- release notes ---"
+          cat release-notes.md
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Nuvio ${{ needs.prepare.outputs.version }}"
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          body_path: release-notes.md
+          prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}
+          files: |
+            release-assets/*.apk
+            release-assets/*.ipa
+            release-assets/*.msi
+            release-assets/*.exe
+            release-assets/*.dmg
+            release-assets/*.deb
+          fail_on_unmatched_files: true

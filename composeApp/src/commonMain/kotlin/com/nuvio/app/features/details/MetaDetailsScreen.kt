@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,7 +33,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -68,6 +66,7 @@ import com.nuvio.app.core.network.NetworkStatusRepository
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.TraktListPickerDialog
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.core.ui.nuvioStatusBarTopPadding
 import com.nuvio.app.features.details.components.DetailActionButtons
 import com.nuvio.app.features.details.components.DetailSecondaryAction
 import com.nuvio.app.features.details.components.CommentDetailSheet
@@ -82,8 +81,8 @@ import com.nuvio.app.features.details.components.DetailProductionSection
 import com.nuvio.app.features.details.components.DetailSeriesContent
 import com.nuvio.app.features.details.components.DetailTrailersSection
 import com.nuvio.app.features.details.components.EpisodeWatchedActionSheet
+import com.nuvio.app.features.details.components.TrailerPlayer
 import com.nuvio.app.features.details.components.SeasonWatchedActionSheet
-import com.nuvio.app.features.details.components.TrailerPlayerPopup
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.library.LibraryRepository
 import com.nuvio.app.features.library.toLibraryItem
@@ -109,17 +108,82 @@ import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
+import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.watching.application.WatchingActions
 import com.nuvio.app.features.watching.application.WatchingState
+import com.nuvio.app.isDesktop
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
+data class PlayableTarget(
+    val type: String,
+    val videoId: String,
+    val parentMetaId: String,
+    val parentMetaType: String,
+    val title: String,
+    val logo: String?,
+    val poster: String?,
+    val background: String?,
+    val seasonNumber: Int?,
+    val episodeNumber: Int?,
+    val episodeTitle: String?,
+    val episodeThumbnail: String?,
+    val pauseDescription: String?,
+    val resumePositionMs: Long?,
+)
+
 @Composable
 @OptIn(ExperimentalSharedTransitionApi::class)
 fun MetaDetailsScreen(
+    type: String,
+    id: String,
+    onBack: () -> Unit,
+    onPlay: ((type: String, videoId: String, parentMetaId: String, parentMetaType: String, title: String, logo: String?, poster: String?, background: String?, seasonNumber: Int?, episodeNumber: Int?, episodeTitle: String?, episodeThumbnail: String?, pauseDescription: String?, resumePositionMs: Long?) -> Unit)? = null,
+    onPlayManually: ((type: String, videoId: String, parentMetaId: String, parentMetaType: String, title: String, logo: String?, poster: String?, background: String?, seasonNumber: Int?, episodeNumber: Int?, episodeTitle: String?, episodeThumbnail: String?, pauseDescription: String?, resumePositionMs: Long?) -> Unit)? = null,
+    onLaunchStream: ((target: PlayableTarget, stream: StreamItem, forceExternal: Boolean, forceInternal: Boolean, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit)? = null,
+    onOpenMeta: ((MetaPreview) -> Unit)? = null,
+    onCastClick: ((MetaPerson, String?) -> Unit)? = null,
+    onCompanyClick: ((MetaCompany, String) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    modifier: Modifier = Modifier,
+) {
+    if (isDesktop) {
+        MetaDetailsScreenDesktop(
+            type = type,
+            id = id,
+            onBack = onBack,
+            onLaunchStream = onLaunchStream,
+            onOpenMeta = onOpenMeta,
+            onCastClick = onCastClick,
+            onCompanyClick = onCompanyClick,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            modifier = modifier,
+        )
+    } else {
+        MetaDetailsScreenMobile(
+            type = type,
+            id = id,
+            onBack = onBack,
+            onPlay = onPlay,
+            onPlayManually = onPlayManually,
+            onOpenMeta = onOpenMeta,
+            onCastClick = onCastClick,
+            onCompanyClick = onCompanyClick,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalSharedTransitionApi::class)
+internal fun MetaDetailsScreenMobile(
     type: String,
     id: String,
     onBack: () -> Unit,
@@ -715,10 +779,7 @@ fun MetaDetailsScreen(
                 val listState = rememberLazyListState()
                 val density = LocalDensity.current
                 val safeAreaTopPx = with(density) {
-                    WindowInsets.statusBars
-                        .asPaddingValues()
-                        .calculateTopPadding()
-                        .toPx()
+                    nuvioStatusBarTopPadding().toPx()
                 }
                 var heroHeightPx by remember(meta.id) { mutableIntStateOf(0) }
                 val thresholdPx = (heroHeightPx - safeAreaTopPx).coerceAtLeast(0f)
@@ -756,6 +817,7 @@ fun MetaDetailsScreen(
 
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val isTablet = maxWidth >= 720.dp
+                    val viewportHeight = maxHeight
                     val contentHorizontalPadding = if (isTablet) 32.dp else 18.dp
                     val contentMaxWidth = detailTabletContentMaxWidth(maxWidth, isTablet)
                     val cinematicEnabled = metaScreenSettingsUiState.cinematicBackground && deferredMetaWorkAllowed
@@ -789,6 +851,7 @@ fun MetaDetailsScreen(
                                 DetailHero(
                                     meta = meta,
                                     isTablet = isTablet,
+                                    viewportHeight = viewportHeight,
                                     contentMaxWidth = contentMaxWidth,
                                     scrollOffset = heroScrollOffset,
                                     onHeightChanged = { heroHeightPx = it },
@@ -925,7 +988,7 @@ fun MetaDetailsScreen(
                                 onClick = onBackFromDetails,
                                 modifier = Modifier.padding(
                                     start = 12.dp,
-                                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
+                                    top = nuvioStatusBarTopPadding() + 8.dp,
                                 ).zIndex(2f),
                                 containerColor = Color.Transparent,
                                 contentColor = MaterialTheme.colorScheme.onBackground,
@@ -1073,7 +1136,7 @@ fun MetaDetailsScreen(
                         }
 
                         if (inAppTrailerPlaybackEnabled) {
-                            TrailerPlayerPopup(
+                            TrailerPlayer(
                                 visible = selectedTrailer != null,
                                 trailerTitle = selectedTrailer?.displayName ?: selectedTrailer?.name.orEmpty(),
                                 trailerType = selectedTrailer?.type.orEmpty(),
@@ -1177,7 +1240,7 @@ fun MetaDetailsScreen(
                 onClick = onBack,
                 modifier = Modifier.padding(
                     start = 12.dp,
-                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 8.dp,
+                    top = nuvioStatusBarTopPadding() + 8.dp,
                 ),
                 containerColor = Color.Transparent,
                 contentColor = MaterialTheme.colorScheme.onBackground,

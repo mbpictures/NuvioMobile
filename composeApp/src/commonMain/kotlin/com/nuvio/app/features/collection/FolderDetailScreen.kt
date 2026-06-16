@@ -49,8 +49,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.NuvioPosterCard
+import com.nuvio.app.core.ui.nuvioStatusBarTopPadding
 import com.nuvio.app.core.ui.NuvioPosterShape
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
@@ -61,6 +63,7 @@ import com.nuvio.app.features.home.PosterShape
 import com.nuvio.app.features.home.canOpenCatalog
 import com.nuvio.app.features.home.stableKey
 import com.nuvio.app.features.home.components.HomeCatalogRowSection
+import com.nuvio.app.features.library.LibraryRepository
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watching.application.WatchingState
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -88,7 +91,7 @@ fun FolderDetailScreen(
     val folder = uiState.folder
     val coverImageUrl = folder?.coverImageUrl?.takeIf { it.isNotBlank() }
     val density = LocalDensity.current
-    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val statusBarTop = nuvioStatusBarTopPadding()
     val maxHeroHeightPx = with(density) { FolderCoverHeight.toPx() }
     var heroHeightPx by remember(coverImageUrl, maxHeroHeightPx) {
         mutableFloatStateOf(if (coverImageUrl != null) maxHeroHeightPx else 0f)
@@ -214,6 +217,10 @@ private fun TabbedGridContent(
     onPosterClick: (MetaPreview) -> Unit,
 ) {
     val gridState = rememberLazyGridState()
+    val libraryUiState by remember {
+        LibraryRepository.ensureLoaded()
+        LibraryRepository.uiState
+    }.collectAsStateWithLifecycle()
 
     LaunchedEffect(gridState, uiState.selectedTabIndex, uiState.selectedTabCanLoadMore, uiState.selectedTabIsLoadingMore) {
         snapshotFlow { gridState.layoutInfo }
@@ -290,6 +297,15 @@ private fun TabbedGridContent(
                             key = { item -> item.lazyKey },
                         ) { keyedItem ->
                             val item = keyedItem.value
+                            val isSaved = remember(
+                                libraryUiState.items,
+                                libraryUiState.sections,
+                                libraryUiState.sourceMode,
+                                item.id,
+                                item.type,
+                            ) {
+                                LibraryRepository.isSaved(item.id, item.type)
+                            }
                             NuvioPosterCard(
                                 title = item.name,
                                 imageUrl = item.poster,
@@ -299,6 +315,7 @@ private fun TabbedGridContent(
                                     watchedKeys = watchedKeys,
                                     item = item,
                                 ),
+                                isSaved = isSaved,
                                 onClick = { onPosterClick(item) },
                             )
                         }

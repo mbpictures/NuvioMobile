@@ -15,6 +15,12 @@ data class PlayerAudioLevel(
     val isMuted: Boolean,
 )
 
+interface PlayerPictureInPictureController {
+    val isSupported: Boolean
+    val isActive: Boolean
+    fun enter()
+}
+
 @Composable
 expect fun LockPlayerToLandscape()
 
@@ -25,7 +31,7 @@ expect fun EnterImmersivePlayerMode(keepScreenAwake: Boolean)
 expect fun ManagePlayerPictureInPicture(
     isPlaying: Boolean,
     playerSize: IntSize,
-)
+): PlayerPictureInPictureController
 
 @Composable
 expect fun rememberPlayerGestureController(): PlayerGestureController?

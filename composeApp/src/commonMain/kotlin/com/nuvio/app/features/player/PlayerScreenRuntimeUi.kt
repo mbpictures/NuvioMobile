@@ -4,15 +4,31 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import com.nuvio.app.features.p2p.P2pStreamingState
+import com.nuvio.app.features.player.cast.CastDevicePicker
 import com.nuvio.app.features.p2p.formatP2pMegabytes
 import com.nuvio.app.features.p2p.formatP2pSpeed
+import com.nuvio.app.isDesktop
 import com.nuvio.app.isIos
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
@@ -82,11 +98,69 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         }
     }
     val gestureCallbacks = rememberSurfaceGestureCallbacks()
+    val isInPictureInPicture = pictureInPictureController?.isActive == true
+    val playerKeyFocus = remember { FocusRequester() }
+    if (isDesktop) {
+        LaunchedEffect(Unit) {
+            runCatching { playerKeyFocus.requestFocus() }
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { layoutSize = it }
+            .then(
+                if (isDesktop) {
+                    Modifier
+                        .focusRequester(playerKeyFocus)
+                        .focusable()
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) {
+                                return@onPreviewKeyEvent false
+                            }
+                            when (event.key) {
+                                Key.Spacebar -> {
+                                    togglePlayback()
+                                    true
+                                }
+                                Key.DirectionLeft -> {
+                                    seekBy(-10_000L)
+                                    true
+                                }
+                                Key.DirectionRight -> {
+                                    seekBy(10_000L)
+                                    true
+                                }
+                                Key.Escape -> {
+                                    val ctrl = fullscreenController
+                                    if (ctrl != null && ctrl.isFullscreen) {
+                                        ctrl.toggle()
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                else -> false
+                            }
+                        }
+                        .pointerInput(playerControlsLocked) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    val isMouseMove = (event.type == PointerEventType.Move ||
+                                        event.type == PointerEventType.Enter) &&
+                                        event.changes.any { it.type == PointerType.Mouse }
+                                    if (isMouseMove && !playerControlsLocked) {
+                                        controlsVisible = true
+                                    }
+                                }
+                            }
+                        }
+                } else {
+                    Modifier
+                },
+            )
             .playerSurfaceTapGestures(
                 layoutSize = layoutSize,
                 playerControlsLockedState = gestureCallbacks.playerControlsLocked,
@@ -99,7 +173,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             .playerSurfaceDragGestures(
                 gestureController = gestureController,
                 layoutSize = layoutSize,
-                sideGestureSystemEdgeExclusionPx = sideGestureSystemEdgeExclusionPx,
+                systemGestureEdges = systemGestureEdges,
                 playerControlsLockedState = gestureCallbacks.playerControlsLocked,
                 touchGesturesEnabledState = gestureCallbacks.touchGesturesEnabled,
                 isHoldToSpeedGestureActiveState = gestureCallbacks.isHoldToSpeedGestureActive,
@@ -130,11 +204,14 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     playerControllerSourceUrl = activeSourceUrl
                 },
                 onSnapshot = { snapshot ->
-                    playbackSnapshot = snapshot
-                    if (!snapshot.isLoading) initialLoadCompleted = true
-                    if (snapshot.isEnded) {
-                        shouldPlay = false
-                        controlsVisible = !playerControlsLocked
+                    // While casting, the receiver is the source of truth (mirrored separately).
+                    if (castController?.isCasting != true) {
+                        playbackSnapshot = snapshot
+                        if (!snapshot.isLoading) initialLoadCompleted = true
+                        if (snapshot.isEnded) {
+                            shouldPlay = false
+                            controlsVisible = !playerControlsLocked
+                        }
                     }
                 },
                 onError = { message ->
@@ -151,7 +228,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
         }
 
         AnimatedVisibility(
-            visible = pausedOverlayVisible && !controlsVisible && !playerControlsLocked,
+            visible = pausedOverlayVisible && !controlsVisible && !playerControlsLocked && !isInPictureInPicture,
             enter = fadeIn(animationSpec = tween(durationMillis = 220)),
             exit = fadeOut(animationSpec = tween(durationMillis = 180)),
         ) {
@@ -170,7 +247,11 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             )
         }
 
-        RenderPlayerControls(displayedPositionMs = displayedPositionMs, isEpisode = isEpisode)
+        RenderPlayerControls(
+            displayedPositionMs = displayedPositionMs,
+            isEpisode = isEpisode,
+            isInPictureInPicture = isInPictureInPicture,
+        )
         RenderPlaybackOverlays(
             runtime = runtime,
             displayedPositionMs = displayedPositionMs,
@@ -180,15 +261,28 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             showP2pRebufferStats = showP2pRebufferStats,
             p2pRebufferMessage = p2pRebufferMessage,
             p2pRebufferProgress = p2pRebufferProgress,
+            isInPictureInPicture = isInPictureInPicture,
         )
         RenderPlayerModals(displayedPositionMs = displayedPositionMs)
+
+        val cast = castController
+        if (showCastPicker && cast != null) {
+            CastDevicePicker(
+                controller = cast,
+                onDismiss = { showCastPicker = false },
+            )
+        }
     }
 }
 
 @Composable
-private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, isEpisode: Boolean) {
+private fun PlayerScreenRuntime.RenderPlayerControls(
+    displayedPositionMs: Long,
+    isEpisode: Boolean,
+    isInPictureInPicture: Boolean,
+) {
     AnimatedVisibility(
-        visible = (controlsVisible || showParentalGuide) && !playerControlsLocked,
+        visible = (controlsVisible || showParentalGuide) && !playerControlsLocked && !isInPictureInPicture,
         enter = fadeIn(),
         exit = fadeOut(),
     ) {
@@ -205,8 +299,12 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             resizeMode = resizeMode,
             isLocked = playerControlsLocked,
             showPlaybackControls = controlsVisible,
-            onLockToggle = {
-                if (playerControlsLocked) unlockPlayerControls() else lockPlayerControls()
+            onLockToggle = if (isDesktop) {
+                null
+            } else {
+                {
+                    if (playerControlsLocked) unlockPlayerControls() else lockPlayerControls()
+                }
             },
             onBack = {
                 flushWatchProgress()
@@ -273,6 +371,13 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             } else {
                 null
             },
+            onPictureInPictureClick = pictureInPictureController?.takeIf { it.isSupported }?.let { pip ->
+                { pip.enter() }
+            },
+            onCastClick = castController?.let { { showCastPicker = true } },
+            isCasting = castController?.isCasting == true,
+            onFullscreenClick = fullscreenController?.let { ctrl -> { ctrl.toggle() } },
+            isFullscreen = fullscreenController?.isFullscreen == true,
             parentalWarnings = parentalWarnings,
             showParentalGuide = showParentalGuide,
             onParentalGuideAnimationComplete = { showParentalGuide = false },
@@ -283,8 +388,13 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
             onScrubFinished = { positionMs ->
                 isScrubbingTimeline = false
                 scrubbingPositionMs = null
-                playerController?.seekTo(positionMs)
-                scheduleProgressSyncAfterSeek()
+                val cast = castController
+                if (cast != null && cast.isCasting) {
+                    cast.seekTo(positionMs)
+                } else {
+                    playerController?.seekTo(positionMs)
+                    scheduleProgressSyncAfterSeek()
+                }
             },
             horizontalSafePadding = horizontalSafePadding,
             modifier = Modifier.fillMaxSize(),
@@ -302,11 +412,13 @@ private fun BoxScope.RenderPlaybackOverlays(
     showP2pRebufferStats: Boolean,
     p2pRebufferMessage: String?,
     p2pRebufferProgress: Float?,
+    isInPictureInPicture: Boolean,
 ) {
     runtime.run {
         PlayerPlaybackOverlays(
             playerControlsLocked = playerControlsLocked,
             lockedOverlayVisible = lockedOverlayVisible,
+            isInPictureInPicture = isInPictureInPicture,
             playbackSnapshot = playbackSnapshot,
         displayedPositionMs = displayedPositionMs,
         metrics = metrics,

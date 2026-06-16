@@ -27,6 +27,7 @@ import com.nuvio.app.features.player.skip.SkipInterval
 internal fun BoxScope.PlayerPlaybackOverlays(
     playerControlsLocked: Boolean,
     lockedOverlayVisible: Boolean,
+    isInPictureInPicture: Boolean,
     playbackSnapshot: PlayerPlaybackSnapshot,
     displayedPositionMs: Long,
     metrics: PlayerLayoutMetrics,
@@ -65,7 +66,7 @@ internal fun BoxScope.PlayerPlaybackOverlays(
     onDismissError: () -> Unit,
 ) {
     AnimatedVisibility(
-        visible = playerControlsLocked && lockedOverlayVisible,
+        visible = playerControlsLocked && lockedOverlayVisible && !isInPictureInPicture,
         enter = fadeIn(),
         exit = fadeOut(),
     ) {
@@ -80,7 +81,7 @@ internal fun BoxScope.PlayerPlaybackOverlays(
     }
 
     AnimatedVisibility(
-        visible = showOpeningOverlay,
+        visible = showOpeningOverlay && !isInPictureInPicture,
         enter = fadeIn(),
         exit = fadeOut(),
     ) {
@@ -106,7 +107,7 @@ internal fun BoxScope.PlayerPlaybackOverlays(
     )
 
     AnimatedVisibility(
-        visible = currentGestureFeedback != null,
+        visible = currentGestureFeedback != null && !isInPictureInPicture,
         enter = fadeIn(),
         exit = fadeOut(),
     ) {
@@ -126,7 +127,7 @@ internal fun BoxScope.PlayerPlaybackOverlays(
         }
     }
 
-    if (!playerControlsLocked) {
+    if (!playerControlsLocked && !isInPictureInPicture) {
         SkipIntroButton(
             interval = if (!initialLoadCompleted || pausedOverlayVisible) null else activeSkipInterval,
             dismissed = skipIntervalDismissed,
@@ -141,7 +142,7 @@ internal fun BoxScope.PlayerPlaybackOverlays(
         )
     }
 
-    if (isSeries && !playerControlsLocked) {
+    if (isSeries && !playerControlsLocked && !isInPictureInPicture) {
         NextEpisodeCard(
             nextEpisode = nextEpisodeInfo,
             visible = showNextEpisodeCard,

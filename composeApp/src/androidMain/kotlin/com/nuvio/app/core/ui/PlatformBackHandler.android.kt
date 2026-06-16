@@ -2,6 +2,7 @@ package com.nuvio.app.core.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavHostController
 
 @Composable
 actual fun PlatformBackHandler(
@@ -10,3 +11,6 @@ actual fun PlatformBackHandler(
 ) {
     BackHandler(enabled = enabled, onBack = onBack)
 }
+
+@Composable
+actual fun BindPlatformBackNavigation(navController: NavHostController) = Unit

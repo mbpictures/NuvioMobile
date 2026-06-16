@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.ui.nuvioSecondaryClick
 import com.nuvio.app.features.debrid.DebridProviders
 
 @Composable
@@ -88,6 +89,7 @@ internal fun StreamCard(
                     Modifier
                 },
             )
+            .nuvioSecondaryClick(if (enabled) onLongClick else null)
             .combinedClickable(
                 enabled = enabled,
                 onClick = onClick,

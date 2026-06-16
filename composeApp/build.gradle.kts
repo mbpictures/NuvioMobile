@@ -1,4 +1,3 @@
-import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
@@ -7,9 +6,12 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+import java.io.File
+import java.net.URI
 import java.util.Properties
 
 abstract class GenerateRuntimeConfigsTask : DefaultTask() {
@@ -134,6 +136,35 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     }
 }
 
+abstract class RenameReleaseArtifactTask : DefaultTask() {
+    @get:Input
+    abstract val versionName: Property<String>
+
+    @get:Input
+    abstract val extension: Property<String>
+
+    @get:OutputDirectory
+    abstract val artifactDirectory: DirectoryProperty
+
+    @TaskAction
+    fun renameArtifact() {
+        val dir = artifactDirectory.get().asFile
+        if (!dir.exists()) return
+        val ext = extension.get()
+        val targetFile = dir.resolve("Nuvio-${versionName.get()}.$ext")
+        val sourceFile = dir.listFiles()
+            ?.filter { it.extension == ext && it.name.startsWith("Nuvio-") }
+            ?.maxByOrNull { it.lastModified() }
+            ?: return
+
+        if (sourceFile.absolutePath != targetFile.absolutePath) {
+            targetFile.delete()
+            sourceFile.copyTo(targetFile, overwrite = true)
+            sourceFile.delete()
+        }
+    }
+}
+
 fun readXcconfigValue(file: File, key: String): String? {
     if (!file.exists()) return null
     return file.readLines()
@@ -185,7 +216,7 @@ val iosDistributionSourceDir = if (iosDistribution == "full") {
 } else {
     "src/iosAppStore/kotlin"
 }
-val iosFrameworkBundleId = "com.nuvio.media"
+val iosFrameworkBundleId = "com.nuvio.media.fork"
 val fullCommonSourceDir = project.file("src/fullCommonMain/kotlin")
 val generatedRuntimeConfigDir = layout.buildDirectory.dir("generated/runtime-config/kotlin")
 val requestedGradleTasks = gradle.startParameter.taskNames.map { taskName ->
@@ -202,7 +233,10 @@ val isAndroidAppBundleBuild = requestedGradleTasks.any { taskName ->
 
 val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generateRuntimeConfigs") {
     outputDir.set(generatedRuntimeConfigDir)
-    localPropertiesFile.set(rootProject.layout.projectDirectory.file("local.properties"))
+    val localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) {
+        localPropertiesFile.set(localPropsFile)
+    }
     appVersionName.set(releaseAppVersionName)
     appVersionCode.set(releaseAppVersionCode)
 }
@@ -213,6 +247,12 @@ tasks.withType<KotlinCompilationTask<*>>().configureEach {
 
 kotlin {
     androidTarget {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_11)
+        }
+    }
+
+    jvm("desktop") {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_11)
         }
@@ -256,6 +296,17 @@ kotlin {
         val commonMain by getting {
             kotlin.srcDir(generatedRuntimeConfigDir)
         }
+        val desktopMain by getting {
+            kotlin.srcDir(fullCommonSourceDir)
+            dependencies {
+                implementation(compose.desktop.currentOs)
+                implementation(libs.ktor.client.java)
+                implementation(libs.kotlinx.coroutines.swing)
+                implementation(libs.jna)
+                implementation(libs.quickjs.kt)
+                implementation(libs.ksoup)
+            }
+        }
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.appcompat)
@@ -279,6 +330,8 @@ kotlin {
             implementation(libs.androidx.media3.common)
             implementation(libs.androidx.media3.container)
             implementation(libs.androidx.media3.extractor)
+            implementation(libs.play.services.cast.framework)
+            implementation(libs.androidx.mediarouter)
             implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("lib-*.aar"))))
         }
         commonMain.dependencies {
@@ -325,6 +378,314 @@ dependencies {
     debugImplementation(libs.compose.uiTooling)
 }
 
+compose.desktop {
+    application {
+        mainClass = "com.nuvio.app.DesktopAppKt"
+        buildTypes.release.proguard {
+            configurationFiles.from(project.file("desktop-proguard-rules.pro"))
+        }
+        nativeDistributions {
+            packageName = "Nuvio"
+            modules("java.net.http")
+            targetFormats(
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe,
+                org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb,
+            )
+            macOS {
+                dockName = "Nuvio"
+                iconFile.set(project.file("desktop-icons/nuvio.icns"))
+                infoPlist {
+                    extraKeysRawXml = """
+                        <key>NSRequiresAquaSystemAppearance</key>
+                        <false/>
+                    """.trimIndent()
+                }
+            }
+            windows {
+                // Stable identity for in-place upgrades; never change once published.
+                upgradeUuid = "7B3F8C2E-4A1D-4E5F-9D6B-1C2A3B4C5D6E"
+                menuGroup = "Nuvio"
+                menu = true
+                shortcut = true
+                dirChooser = true
+                perUserInstall = true
+                val winIcon = project.file("desktop-icons/nuvio.ico")
+                if (winIcon.exists()) {
+                    iconFile.set(winIcon)
+                }
+            }
+            linux {
+                // Adds a desktop launcher entry so the installed .deb shows up in app menus.
+                menuGroup = "Nuvio"
+                shortcut = true
+                val linuxIcon = project.file("desktop-icons/nuvio.png")
+                if (linuxIcon.exists()) {
+                    iconFile.set(linuxIcon)
+                }
+            }
+        }
+    }
+}
+
+val renameReleaseDmgArtifact = tasks.register<RenameReleaseArtifactTask>("renameReleaseDmgArtifact") {
+    versionName.set(releaseAppVersionName)
+    extension.set("dmg")
+    artifactDirectory.set(layout.buildDirectory.dir("compose/binaries/main-release/dmg"))
+}
+
+val renameReleaseMsiArtifact = tasks.register<RenameReleaseArtifactTask>("renameReleaseMsiArtifact") {
+    versionName.set(releaseAppVersionName)
+    extension.set("msi")
+    artifactDirectory.set(layout.buildDirectory.dir("compose/binaries/main-release/msi"))
+}
+
+val renameReleaseExeArtifact = tasks.register<RenameReleaseArtifactTask>("renameReleaseExeArtifact") {
+    versionName.set(releaseAppVersionName)
+    extension.set("exe")
+    artifactDirectory.set(layout.buildDirectory.dir("compose/binaries/main-release/exe"))
+}
+
+tasks.matching { it.name == "packageReleaseDmg" }.configureEach { finalizedBy(renameReleaseDmgArtifact) }
+tasks.matching { it.name == "packageReleaseMsi" }.configureEach { finalizedBy(renameReleaseMsiArtifact) }
+tasks.matching { it.name == "packageReleaseExe" }.configureEach { finalizedBy(renameReleaseExeArtifact) }
+tasks.matching { it.name == "packageReleaseDistributionForCurrentOS" }.configureEach {
+    finalizedBy(renameReleaseDmgArtifact, renameReleaseMsiArtifact, renameReleaseExeArtifact)
+}
+
+// The legacy Swift bridge (MPVKit/Sources/DesktopMPVBridge) is no longer used. macOS playback
+// now loads libmpv.dylib directly via JNA, mirroring the Windows backend. See fetchMacOSLibmpv
+// below for how the dylibs are fetched and patched.
+
+abstract class FetchWindowsLibmpvTask : DefaultTask() {
+    @get:Input
+    abstract val archiveUrl: Property<String>
+
+    @get:Input
+    abstract val extractorUrl: Property<String>
+
+    @get:OutputFile
+    abstract val archiveFile: RegularFileProperty
+
+    @get:OutputFile
+    abstract val extractorFile: RegularFileProperty
+
+    @get:OutputFile
+    abstract val dllFile: RegularFileProperty
+
+    @TaskAction
+    fun fetch() {
+        downloadIfMissing(archiveFile.get().asFile, archiveUrl.get(), minSize = 1_000_000L, label = "libmpv archive")
+        downloadIfMissing(extractorFile.get().asFile, extractorUrl.get(), minSize = 100_000L, label = "7zr extractor")
+
+        val dll = dllFile.get().asFile
+        dll.parentFile.mkdirs()
+        if (dll.exists()) dll.delete()
+
+        val outDir = dll.parentFile
+        val process = ProcessBuilder(
+            extractorFile.get().asFile.absolutePath,
+            "e",
+            archiveFile.get().asFile.absolutePath,
+            "-o${outDir.absolutePath}",
+            "-y",
+            "-r",
+            "libmpv-2.dll",
+        ).redirectErrorStream(true).start()
+        val stdout = process.inputStream.bufferedReader().readText()
+        val exit = process.waitFor()
+        if (exit != 0) {
+            throw GradleException("7zr extraction failed (exit $exit):\n$stdout")
+        }
+        if (!dll.exists()) {
+            throw GradleException("libmpv-2.dll not found after extraction.\n7zr output:\n$stdout")
+        }
+        logger.lifecycle("Extracted libmpv-2.dll (${dll.length() / 1024} KiB)")
+    }
+
+    private fun downloadIfMissing(target: File, url: String, minSize: Long, label: String) {
+        if (target.exists() && target.length() >= minSize) return
+        target.parentFile.mkdirs()
+        logger.lifecycle("Downloading $label: $url")
+        URI(url).toURL().openStream().use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        }
+    }
+}
+
+val libmpvArchiveUrl =
+    "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20260527/mpv-dev-x86_64-20260527-git-427e4bf.7z"
+val sevenZrExtractorUrl = "https://www.7-zip.org/a/7zr.exe"
+val libmpvResourceRoot = layout.buildDirectory.dir("generated/libmpv")
+
+val fetchWindowsLibmpv = tasks.register<FetchWindowsLibmpvTask>("fetchWindowsLibmpv") {
+    onlyIf { org.gradle.internal.os.OperatingSystem.current().isWindows }
+    archiveUrl.set(libmpvArchiveUrl)
+    extractorUrl.set(sevenZrExtractorUrl)
+    archiveFile.set(layout.buildDirectory.file("libmpv-cache/libmpv.7z"))
+    extractorFile.set(layout.buildDirectory.file("libmpv-cache/7zr.exe"))
+    dllFile.set(libmpvResourceRoot.map { it.file("win32-x86-64/libmpv-2.dll") })
+}
+
+abstract class FetchMacOSLibmpvTask : DefaultTask() {
+    @get:Input
+    abstract val archiveUrl: Property<String>
+
+    @get:OutputFile
+    abstract val archiveFile: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun fetch() {
+        val archive = archiveFile.get().asFile
+        if (!archive.exists() || archive.length() < 1_000_000L) {
+            archive.parentFile.mkdirs()
+            logger.lifecycle("Downloading libmpv archive: ${archiveUrl.get()}")
+            URI(archiveUrl.get()).toURL().openStream().use { input ->
+                archive.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+
+        val outDir = outputDir.get().asFile
+        outDir.deleteRecursively()
+        outDir.mkdirs()
+
+        val tarProcess = ProcessBuilder(
+            "tar", "-xzf", archive.absolutePath, "-C", outDir.absolutePath, "--strip-components=1",
+        ).redirectErrorStream(true).start()
+        val tarStdout = tarProcess.inputStream.bufferedReader().readText()
+        if (tarProcess.waitFor() != 0) {
+            throw GradleException("Failed to extract libmpv archive:\n$tarStdout")
+        }
+
+        val dylibs = outDir.listFiles { f -> f.isFile && f.name.endsWith(".dylib") }
+            ?: throw GradleException("No dylibs found in ${outDir.absolutePath}")
+        if (dylibs.none { it.name == "libmpv.dylib" }) {
+            throw GradleException("libmpv.dylib missing from extracted archive at ${outDir.absolutePath}")
+        }
+
+        // The upstream dylibs reference siblings via @rpath/<name>, but the LC_RPATH entries
+        // point at Nix-store paths from the build host. Add @loader_path so dyld finds the
+        // sibling dylibs at runtime when they sit next to libmpv.dylib.
+        dylibs.forEach { dylib ->
+            val patch = ProcessBuilder("install_name_tool", "-add_rpath", "@loader_path", dylib.absolutePath)
+                .redirectErrorStream(true).start()
+            val out = patch.inputStream.bufferedReader().readText()
+            if (patch.waitFor() != 0 && "would duplicate path" !in out) {
+                throw GradleException("install_name_tool failed for ${dylib.name}:\n$out")
+            }
+        }
+        logger.lifecycle("Extracted ${dylibs.size} dylibs into ${outDir.absolutePath}")
+    }
+}
+
+abstract class DownloadFileTask : DefaultTask() {
+    @get:Input
+    abstract val sourceUrl: Property<String>
+
+    @get:Input
+    abstract val minSize: Property<Long>
+
+    @get:OutputFile
+    abstract val targetFile: RegularFileProperty
+
+    @TaskAction
+    fun download() {
+        val target = targetFile.get().asFile
+        if (target.exists() && target.length() >= minSize.get()) return
+        target.parentFile.mkdirs()
+        logger.lifecycle("Downloading ${sourceUrl.get()}")
+        URI(sourceUrl.get()).toURL().openStream().use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        }
+        if (target.length() < minSize.get()) {
+            throw GradleException("Downloaded ${target.name} is smaller than expected (${target.length()} bytes)")
+        }
+    }
+}
+
+abstract class FetchLinuxLibmpvTask : DefaultTask() {
+    @get:Input
+    abstract val embedEnabled: Property<Boolean>
+
+    @get:InputFile
+    abstract val scriptFile: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun fetch() {
+        val out = outputDir.get().asFile
+        val script = scriptFile.get().asFile
+        val process = ProcessBuilder("bash", script.absolutePath, out.absolutePath)
+            .redirectErrorStream(true)
+            .start()
+        process.inputStream.bufferedReader().forEachLine { line ->
+            if (line.isNotBlank()) logger.lifecycle(line)
+        }
+        val exit = process.waitFor()
+        if (exit != 0) {
+            throw GradleException("fetch-linux-libmpv.sh failed (exit $exit)")
+        }
+        if (!out.resolve("libmpv.so.2").isFile) {
+            throw GradleException("libmpv.so.2 missing from $out after fetch")
+        }
+    }
+}
+
+val macOSLibmpvArchiveUrl =
+    "https://github.com/media-kit/libmpv-darwin-build/releases/download/v0.7.0/libmpv-libs_v0.7.0_macos-universal-video-default.tar.gz"
+
+val fetchMacOSLibmpv = tasks.register<FetchMacOSLibmpvTask>("fetchMacOSLibmpv") {
+    onlyIf { org.gradle.internal.os.OperatingSystem.current().isMacOsX }
+    archiveUrl.set(macOSLibmpvArchiveUrl)
+    archiveFile.set(layout.buildDirectory.file("libmpv-cache/macos-libmpv.tar.gz"))
+    outputDir.set(libmpvResourceRoot.map { it.dir("macos-universal") })
+}
+
+// Embed libmpv on Linux (self-contained bundle, like Windows/macOS) with
+// -Pnuvio.desktop.embedMpvLinux=true. Off by default: dev builds stay fast and the runtime uses a
+// system-installed libmpv (sudo apt install libmpv1). The embedded bundle is built from conda-forge
+// and needs a modern libstdc++ (Ubuntu 22.04+), so it is opt-in rather than forced.
+val embedMpvLinux = (providers.gradleProperty("nuvio.desktop.embedMpvLinux").orNull ?: "false").toBoolean()
+val fetchLinuxLibmpv = tasks.register<FetchLinuxLibmpvTask>("fetchLinuxLibmpv") {
+    embedEnabled.set(embedMpvLinux)
+    // Read the gate from the task's own input (not the script-level `embedMpvLinux` local): an onlyIf
+    // spec is stored in the configuration cache, and referencing a top-level script val from it would
+    // capture the Build_gradle script object, which is not serializable.
+    onlyIf {
+        org.gradle.internal.os.OperatingSystem.current().isLinux &&
+            (it as FetchLinuxLibmpvTask).embedEnabled.get()
+    }
+    scriptFile.set(project.file("desktop-scripts/fetch-linux-libmpv.sh"))
+    outputDir.set(libmpvResourceRoot.map { it.dir("linux-x86-64") })
+}
+
+// Bundle a color-emoji font on Linux: the app's JetBrains Sans font has no emoji glyphs and minimal
+// Linux installs ship none, so Skia's fallback finds nothing. macOS/Windows use their OS emoji font.
+val emojiFontResourceRoot = layout.buildDirectory.dir("generated/desktop-fonts")
+val fetchDesktopEmojiFont = tasks.register<DownloadFileTask>("fetchDesktopEmojiFont") {
+    onlyIf { org.gradle.internal.os.OperatingSystem.current().isLinux }
+    sourceUrl.set("https://github.com/googlefonts/noto-emoji/raw/v2.047/fonts/NotoColorEmoji.ttf")
+    minSize.set(1_000_000L)
+    targetFile.set(emojiFontResourceRoot.map { it.file("fonts/NotoColorEmoji.ttf") })
+}
+
+kotlin {
+    sourceSets {
+        val desktopMain by getting {
+            resources.srcDir(fetchWindowsLibmpv.map { libmpvResourceRoot.get().asFile })
+            resources.srcDir(fetchMacOSLibmpv.map { libmpvResourceRoot.get().asFile })
+            resources.srcDir(fetchLinuxLibmpv.map { libmpvResourceRoot.get().asFile })
+            resources.srcDir(fetchDesktopEmojiFont.map { emojiFontResourceRoot.get().asFile })
+        }
+    }
+}
+
 configurations.all {
     exclude(group = "androidx.media3", module = "media3-exoplayer")
     exclude(group = "androidx.media3", module = "media3-ui")
@@ -346,7 +707,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.nuvio.app"
+        applicationId = "com.nuvio.media.fork"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = releaseAppVersionCode
@@ -381,6 +742,9 @@ android {
         }
     }
     buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+        }
         getByName("release") {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -392,6 +756,15 @@ android {
             ndk {
                 debugSymbolLevel = "FULL"
             }
+        }
+    }
+    splits {
+        abi {
+            val splitEnabled = providers.gradleProperty("nuvio.splitAbi").orNull?.toBoolean() == true
+            isEnable = splitEnabled
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = false
         }
     }
     compileOptions {

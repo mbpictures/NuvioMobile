@@ -18,7 +18,6 @@ internal const val PlayerSeekProgressSyncDebounceMs = 700L
 internal const val P2pInitialPreloadTargetBytes = 5_242_880L
 internal const val NEXT_EPISODE_HARD_TIMEOUT_MS = 120_000L
 
-internal val PlayerSideGestureSystemEdgeExclusion = 72.dp
 internal val PlayerSliderOverlayGap = 12.dp
 internal val PlayerTimeRowHeight = 36.dp
 internal val PlayerActionRowHeight = 50.dp
@@ -34,6 +33,13 @@ internal enum class PlayerSideGesture {
     Brightness,
     Volume,
 }
+
+internal data class PlayerSystemGestureEdges(
+    val leftPx: Float = 0f,
+    val rightPx: Float = 0f,
+    val topPx: Float = 0f,
+    val bottomPx: Float = 0f,
+)
 
 internal enum class PlayerSeekDirection {
     Backward,

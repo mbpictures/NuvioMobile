@@ -818,6 +818,7 @@
     <string name="settings_playback_decoder_prefer_app">Preferir descodificadores da app (FFmpeg)</string>
     <string name="settings_playback_decoder_prefer_device">Preferir descodificadores do dispositivo</string>
     <string name="settings_playback_decoder_priority">Prioridade do descodificador</string>
+    <string name="player_decoder_fallback_toast">Falha no descodificador de hardware. A mudar para o descodificador de software para esta transmissão.</string>
     <string name="settings_playback_dialog_close">Toca fora para fechar</string>
     <string name="settings_playback_dialog_save_close">Toca fora para guardar e fechar</string>
     <string name="settings_playback_duration_day_one">%1$d dia</string>
