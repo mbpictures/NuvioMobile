@@ -3,16 +3,12 @@ package com.nuvio.app.features.streams
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,7 +19,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,7 +48,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,7 +58,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -89,13 +82,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import coil3.compose.AsyncImage
-import com.nuvio.app.core.ui.nuvioSecondaryClick
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
 import com.nuvio.app.core.ui.nuvioStatusBarTopPadding
-import com.nuvio.app.features.debrid.DebridProviders
 import com.nuvio.app.features.debrid.DebridSettingsRepository
-import com.nuvio.app.features.p2p.P2pSettingsRepository
-import com.nuvio.app.features.p2p.P2pStreamingEngine
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.isDesktop
@@ -146,10 +135,6 @@ fun StreamsScreen(
         DebridSettingsRepository.ensureLoaded()
         DebridSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
-    val p2pSettings by remember {
-        P2pSettingsRepository.ensureLoaded()
-        P2pSettingsRepository.uiState
-    }.collectAsStateWithLifecycle()
     val watchProgressUiState by remember {
         WatchProgressRepository.ensureLoaded()
         WatchProgressRepository.uiState
@@ -191,15 +176,6 @@ fun StreamsScreen(
         }
     }
     val statusBarTop = nuvioStatusBarTopPadding()
-
-    DisposableEffect(P2pSettingsRepository.isVisible, p2pSettings.p2pEnabled) {
-        if (P2pSettingsRepository.isVisible && p2pSettings.p2pEnabled) {
-            P2pStreamingEngine.warmup()
-        }
-        onDispose {
-            P2pStreamingEngine.cooldownWarmup()
-        }
-    }
 
     LaunchedEffect(type, videoId, seasonNumber, episodeNumber, manualSelection) {
         StreamsRepository.load(
@@ -483,6 +459,7 @@ private fun StreamListNonLazy(
                                 enabled = stream.isSelectableForPlayback(debridEnabled),
                                 appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                                 showFileSizeBadges = streamBadgeSettings.showFileSizeBadges,
+                                showAddonLogo = streamBadgeSettings.showAddonLogo,
                                 badgePlacement = streamBadgeSettings.badgePlacement,
                                 onClick = {
                                     if (stream.isSelectableForPlayback(debridEnabled)) {
@@ -656,6 +633,9 @@ private fun MovieHeroBlock(
     logo: String?,
     modifier: Modifier = Modifier,
 ) {
+    var logoLoadError by remember(logo) { mutableStateOf(false) }
+    val logoUrl = logo?.takeIf { it.isNotBlank() }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -663,14 +643,15 @@ private fun MovieHeroBlock(
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)),
         contentAlignment = Alignment.Center,
     ) {
-        if (logo != null) {
+        if (logoUrl != null && !logoLoadError) {
             AsyncImage(
-                model = logo,
-                contentDescription = null,
+                model = logoUrl,
+                contentDescription = title,
                 modifier = Modifier
                     .height(80.dp)
                     .fillMaxWidth(0.85f),
                 contentScale = ContentScale.Fit,
+                onError = { logoLoadError = true },
             )
         } else {
             Text(
@@ -941,6 +922,7 @@ internal fun StreamList(
                         debridEnabled = debridEnabled,
                         appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                         showFileSizeBadges = streamBadgeSettings.showFileSizeBadges,
+                        showAddonLogo = streamBadgeSettings.showAddonLogo,
                         badgePlacement = streamBadgeSettings.badgePlacement,
                         onStreamSelected = onStreamSelected,
                         onStreamLongPress = onStreamLongPress,
@@ -968,6 +950,7 @@ private fun LazyListScope.streamSection(
     debridEnabled: Boolean,
     appendInstantServiceToDefaultName: Boolean,
     showFileSizeBadges: Boolean,
+    showAddonLogo: Boolean,
     badgePlacement: StreamBadgePlacement,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
@@ -1015,6 +998,7 @@ private fun LazyListScope.streamSection(
                 enabled = stream.isSelectableForPlayback(debridEnabled),
                 appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                 showFileSizeBadges = showFileSizeBadges,
+                showAddonLogo = showAddonLogo,
                 badgePlacement = badgePlacement,
                 onClick = {
                     if (stream.isSelectableForPlayback(debridEnabled)) {
@@ -1110,161 +1094,6 @@ private fun StreamSourceHeader(
         ),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-}
-
-// ---------------------------------------------------------------------------
-// Stream Card
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun StreamCard(
-    stream: StreamItem,
-    enabled: Boolean,
-    appendInstantServiceToDefaultName: Boolean,
-    showFileSizeBadges: Boolean,
-    badgePlacement: StreamBadgePlacement,
-    onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
-) {
-    val cardShape = RoundedCornerShape(12.dp)
-    val badgeImages = stream.badges.filter { it.imageURL.isNotBlank() }
-    val hasBadges = badgeImages.isNotEmpty() || (showFileSizeBadges && stream.behaviorHints.videoSize != null)
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = 68.dp)
-            .shadow(
-                elevation = 2.dp,
-                shape = cardShape,
-                ambientColor = Color.Black.copy(alpha = 0.04f),
-                spotColor = Color.Black.copy(alpha = 0.04f),
-            )
-            .clip(cardShape)
-            .background(Color.White.copy(alpha = 0.05f))
-            .nuvioSecondaryClick(if (enabled) onLongClick else null)
-            .combinedClickable(
-                enabled = enabled,
-                onClick = onClick,
-                onLongClick = onLongClick,
-            )
-            .padding(14.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            if (hasBadges && badgePlacement == StreamBadgePlacement.TOP) {
-                StreamCardBadgeRow(
-                    badgeImages = badgeImages,
-                    stream = stream,
-                    showFileSizeBadges = showFileSizeBadges,
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-            }
-
-            StreamNameWithInstantService(
-                stream = stream,
-                appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
-            )
-
-            val subtitle = stream.streamSubtitle
-            if (!subtitle.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            if (hasBadges && badgePlacement == StreamBadgePlacement.BOTTOM) {
-                Spacer(modifier = Modifier.height(5.dp))
-                StreamCardBadgeRow(
-                    badgeImages = badgeImages,
-                    stream = stream,
-                    showFileSizeBadges = showFileSizeBadges,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StreamCardBadgeRow(
-    badgeImages: List<StreamBadge>,
-    stream: StreamItem,
-    showFileSizeBadges: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.horizontalScroll(rememberScrollState()),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        badgeImages.forEach { badge ->
-            StreamBadgeImage(badge = badge)
-        }
-        if (showFileSizeBadges) {
-            StreamFileSizeBadge(stream = stream)
-        }
-    }
-}
-
-@Composable
-private fun StreamNameWithInstantService(
-    stream: StreamItem,
-    appendInstantServiceToDefaultName: Boolean,
-) {
-    val nameStyle = MaterialTheme.typography.bodyMedium.copy(
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Bold,
-        lineHeight = 20.sp,
-        letterSpacing = 0.sp,
-    )
-    val instantLabel = if (appendInstantServiceToDefaultName) {
-        stream.instantServiceLabel()
-    } else {
-        null
-    }
-    val showInstantLabel = instantLabel != null
-    val visibleState = remember(stream.streamLabel) {
-        MutableTransitionState(showInstantLabel)
-    }
-    visibleState.targetState = showInstantLabel
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stream.streamLabel,
-            modifier = Modifier.weight(1f, fill = false),
-            style = nameStyle,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        AnimatedVisibility(
-            visibleState = visibleState,
-            enter = fadeIn(animationSpec = tween(durationMillis = 260)) +
-                expandHorizontally(
-                    animationSpec = tween(durationMillis = 260),
-                    expandFrom = Alignment.Start,
-                ),
-            exit = fadeOut(animationSpec = tween(durationMillis = 120)) +
-                shrinkHorizontally(
-                    animationSpec = tween(durationMillis = 120),
-                    shrinkTowards = Alignment.Start,
-                ),
-            label = "streamNameInstantService",
-        ) {
-            Text(
-                text = " ${instantLabel.orEmpty()}",
-                style = nameStyle,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1363,15 +1192,6 @@ private fun StreamActionsSheet(
             )
         }
     }
-}
-
-private fun StreamItem.instantServiceLabel(): String? {
-    val status = debridCacheStatus ?: return null
-    if (status.state != StreamDebridCacheState.CACHED) return null
-    val providerLabel = DebridProviders.shortName(status.providerId)
-        .ifBlank { status.providerName.trim() }
-        .ifBlank { DebridProviders.displayName(status.providerId) }
-    return "- $providerLabel Instant"
 }
 
 private fun Long.toPlaybackClock(): String {

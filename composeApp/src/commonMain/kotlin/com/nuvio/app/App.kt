@@ -69,6 +69,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import kotlin.reflect.typeOf
 import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.request.CachePolicy
@@ -109,7 +110,9 @@ import com.nuvio.app.features.auth.AuthScreen
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.catalog.CatalogRepository
 import com.nuvio.app.features.catalog.CatalogScreen
-import com.nuvio.app.features.catalog.INTERNAL_LIBRARY_MANIFEST_URL
+import com.nuvio.app.features.catalog.CatalogTarget
+import com.nuvio.app.features.catalog.CatalogTargetKind
+import com.nuvio.app.features.catalog.CatalogTargetKindNavType
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.CloudLibraryFile
 import com.nuvio.app.features.cloud.CloudLibraryItem
@@ -304,12 +307,64 @@ data class StreamRoute(
 data class CatalogRoute(
     val title: String,
     val subtitle: String,
-    val manifestUrl: String,
-    val type: String,
-    val catalogId: String,
+    val targetKind: CatalogTargetKind,
+    val contentType: String,
     val supportsPagination: Boolean = false,
+    val manifestUrl: String? = null,
+    val addonCatalogId: String? = null,
     val genre: String? = null,
-)
+    val librarySectionType: String? = null,
+    val collectionId: String? = null,
+    val folderId: String? = null,
+    val sourceKey: String? = null,
+) {
+    constructor(
+        title: String,
+        subtitle: String,
+        target: CatalogTarget,
+    ) : this(
+        title = title,
+        subtitle = subtitle,
+        targetKind = when (target) {
+            is CatalogTarget.Addon -> CatalogTargetKind.ADDON
+            is CatalogTarget.Library -> CatalogTargetKind.LIBRARY
+            is CatalogTarget.CollectionSource -> CatalogTargetKind.COLLECTION_SOURCE
+        },
+        contentType = target.contentType,
+        supportsPagination = target.supportsPagination,
+        manifestUrl = (target as? CatalogTarget.Addon)?.manifestUrl,
+        addonCatalogId = (target as? CatalogTarget.Addon)?.catalogId,
+        genre = (target as? CatalogTarget.Addon)?.genre,
+        librarySectionType = (target as? CatalogTarget.Library)?.sectionType,
+        collectionId = (target as? CatalogTarget.CollectionSource)?.collectionId,
+        folderId = (target as? CatalogTarget.CollectionSource)?.folderId,
+        sourceKey = (target as? CatalogTarget.CollectionSource)?.sourceKey,
+    )
+
+    fun toCatalogTarget(): CatalogTarget =
+        when (targetKind) {
+            CatalogTargetKind.ADDON -> CatalogTarget.Addon(
+                manifestUrl = requireNotNull(manifestUrl),
+                contentType = contentType,
+                catalogId = requireNotNull(addonCatalogId),
+                genre = genre,
+                supportsPagination = supportsPagination,
+            )
+
+            CatalogTargetKind.LIBRARY -> CatalogTarget.Library(
+                contentType = contentType,
+                sectionType = requireNotNull(librarySectionType),
+            )
+
+            CatalogTargetKind.COLLECTION_SOURCE -> CatalogTarget.CollectionSource(
+                collectionId = requireNotNull(collectionId),
+                folderId = requireNotNull(folderId),
+                sourceKey = requireNotNull(sourceKey),
+                contentType = contentType,
+                supportsPagination = supportsPagination,
+            )
+        }
+}
 
 private data class PosterActionTarget(
     val preview: MetaPreview,
@@ -345,6 +400,9 @@ private fun PlayerLaunch.toExternalPlayerPlaybackRequest(): ExternalPlayerPlayba
         streamTitle = streamTitle,
         sourceHeaders = sourceHeaders,
         resumePositionMs = initialPositionMs,
+        season = seasonNumber,
+        episode = episodeNumber,
+        episodeTitle = episodeTitle,
     )
 
 private enum class AppGateScreen {
@@ -469,21 +527,26 @@ fun App() {
 
         LaunchedEffect(authState, networkStatusUiState.condition, profileState.profiles) {
             val cachedProfiles = profileState.profiles
-            val allowOfflineProfileAccess =
+            val hasCachedProfileAccess =
                 cachedProfiles.isNotEmpty() &&
-                    authState !is AuthState.Authenticated &&
-                    networkStatusUiState.condition != NetworkCondition.Online
+                    authState !is AuthState.Authenticated
+            val allowCachedProfileAccess =
+                hasCachedProfileAccess &&
+                    (
+                        networkStatusUiState.condition != NetworkCondition.Online ||
+                            gateScreen != AppGateScreen.Auth.name
+                    )
 
             when (authState) {
                 is AuthState.Loading -> {
-                    if (allowOfflineProfileAccess) {
+                    if (hasCachedProfileAccess) {
                         enterProfileGate(cachedProfiles, syncOnEnter = false)
                     } else {
                         gateScreen = AppGateScreen.Loading.name
                     }
                 }
                 is AuthState.Unauthenticated -> {
-                    if (allowOfflineProfileAccess) {
+                    if (allowCachedProfileAccess) {
                         enterProfileGate(cachedProfiles, syncOnEnter = false)
                     } else {
                         ProfileRepository.clearInMemory()
@@ -932,6 +995,14 @@ private fun MainAppContent(
         }
     }
 
+    LaunchedEffect(currentBackStackEntry?.destination) {
+        val inPlaybackFlow = currentBackStackEntry?.destination?.hasRoute<StreamRoute>() == true ||
+            currentBackStackEntry?.destination?.hasRoute<PlayerRoute>() == true
+        if (inPlaybackFlow) {
+            resumePromptItem = null
+        }
+    }
+
         LaunchedEffect(navController) {
             AppDeepLinkRepository.pendingDeepLink.collectLatest { deepLink ->
                 when (deepLink) {
@@ -1283,10 +1354,7 @@ private fun MainAppContent(
                 CatalogRoute(
                     title = section.title,
                     subtitle = section.subtitle,
-                    manifestUrl = section.manifestUrl,
-                    type = section.type,
-                    catalogId = section.catalogId,
-                    supportsPagination = section.supportsPagination,
+                    target = section.target,
                 ),
             )
         }
@@ -1302,15 +1370,16 @@ private fun MainAppContent(
                 CatalogRoute(
                     title = section.displayTitle,
                     subtitle = librarySectionSubtitle,
-                    manifestUrl = INTERNAL_LIBRARY_MANIFEST_URL,
-                    type = section.items.firstOrNull()?.type ?: "movie",
-                    catalogId = section.type,
-                    supportsPagination = false,
+                    target = CatalogTarget.Library(
+                        contentType = section.items.firstOrNull()?.type ?: "movie",
+                        sectionType = section.type,
+                    ),
                 ),
             )
         }
 
         val openContinueWatching: (ContinueWatchingItem, Boolean, Boolean) -> Unit = { item, manualSelection, startFromBeginning ->
+            resumePromptItem = null
             if (item.isCloudLibraryContinueWatchingItem()) {
                 coroutineScope.launch {
                     when (
@@ -1843,12 +1912,11 @@ private fun MainAppContent(
                                 addonId = stream.addonId,
                                 requestHeaders = emptyMap(),
                                 responseHeaders = emptyMap(),
-                                filename = stream.p2pFilename,
+                                filename = stream.behaviorHints.filename,
                                 videoSize = stream.behaviorHints.videoSize,
                                 infoHash = infoHash,
                                 fileIdx = stream.p2pFileIdx,
-                                magnetUri = stream.torrentMagnetUri,
-                                sources = stream.p2pSourceHints,
+                                sources = stream.sources,
                                 bingeGroup = stream.behaviorHints.bingeGroup,
                             )
                         }
@@ -1857,6 +1925,7 @@ private fun MainAppContent(
                             sourceUrl = sentinelUrl,
                             sourceHeaders = emptyMap(),
                             sourceResponseHeaders = emptyMap(),
+                            streamType = stream.streamType,
                             logo = launch.logo,
                             poster = launch.poster,
                             background = launch.background,
@@ -1876,8 +1945,7 @@ private fun MainAppContent(
                             parentMetaType = launch.parentMetaType ?: launch.type,
                             torrentInfoHash = infoHash,
                             torrentFileIdx = stream.p2pFileIdx,
-                            torrentFilename = stream.p2pFilename,
-                            torrentMagnetUri = stream.torrentMagnetUri,
+                            torrentFilename = stream.behaviorHints.filename,
                             torrentTrackers = stream.p2pTrackers,
                             initialPositionMs = resolvedResumePositionMs ?: 0L,
                             initialProgressFraction = resolvedResumeProgressFraction,
@@ -1946,10 +2014,10 @@ private fun MainAppContent(
                         val maxAgeMs = playerSettings.streamReuseLastLinkCacheHours * 60L * 60L * 1000L
                         val cached = StreamLinkCacheRepository.getValid(cacheKey, maxAgeMs)
                         if (cached != null) {
-                            if (cached.url.isBlank() && (!cached.infoHash.isNullOrBlank() || !cached.magnetUri.isNullOrBlank())) {
+                            if (cached.url.isBlank() && !cached.infoHash.isNullOrBlank()) {
                                 val cachedStream = StreamItem(
                                     name = cached.streamName,
-                                    url = cached.magnetUri,
+                                    url = null,
                                     infoHash = cached.infoHash,
                                     fileIdx = cached.fileIdx,
                                     sources = cached.sources,
@@ -1977,6 +2045,7 @@ private fun MainAppContent(
                                     sourceUrl = cached.url,
                                     sourceHeaders = sanitizePlaybackHeaders(cached.requestHeaders),
                                     sourceResponseHeaders = sanitizePlaybackResponseHeaders(cached.responseHeaders),
+                                    streamType = cached.streamType,
                                     logo = launch.logo,
                                     poster = launch.poster,
                                     background = launch.background,
@@ -2102,6 +2171,7 @@ private fun MainAppContent(
                                 filename = stream.behaviorHints.filename,
                                 videoSize = stream.behaviorHints.videoSize,
                                 bingeGroup = stream.behaviorHints.bingeGroup,
+                                streamType = stream.streamType,
                             )
                         }
                         val playerLaunch = PlayerLaunch(
@@ -2109,6 +2179,7 @@ private fun MainAppContent(
                                 sourceUrl = sourceUrl,
                                 sourceHeaders = sanitizePlaybackHeaders(stream.behaviorHints.proxyHeaders?.request),
                                 sourceResponseHeaders = sanitizePlaybackResponseHeaders(stream.behaviorHints.proxyHeaders?.response),
+                                streamType = stream.streamType,
                                 logo = launch.logo,
                                 poster = launch.poster,
                                 background = launch.background,
@@ -2226,6 +2297,7 @@ private fun MainAppContent(
                                 filename = stream.behaviorHints.filename,
                                 videoSize = stream.behaviorHints.videoSize,
                                 bingeGroup = stream.behaviorHints.bingeGroup,
+                                streamType = stream.streamType,
                             )
                         }
                         val playerLaunch = PlayerLaunch(
@@ -2233,6 +2305,7 @@ private fun MainAppContent(
                             sourceUrl = sourceUrl,
                             sourceHeaders = sanitizePlaybackHeaders(stream.behaviorHints.proxyHeaders?.request),
                             sourceResponseHeaders = sanitizePlaybackResponseHeaders(stream.behaviorHints.proxyHeaders?.response),
+                            streamType = stream.streamType,
                             logo = launch.logo,
                             poster = launch.poster,
                             background = launch.background,
@@ -2391,6 +2464,7 @@ private fun MainAppContent(
                         sourceAudioUrl = launch.sourceAudioUrl,
                         sourceHeaders = launch.sourceHeaders,
                         sourceResponseHeaders = launch.sourceResponseHeaders,
+                        streamType = launch.streamType,
                         logo = launch.logo,
                         poster = launch.poster,
                         background = launch.background,
@@ -2411,7 +2485,6 @@ private fun MainAppContent(
                         torrentInfoHash = launch.torrentInfoHash,
                         torrentFileIdx = launch.torrentFileIdx,
                         torrentFilename = launch.torrentFilename,
-                        torrentMagnetUri = launch.torrentMagnetUri,
                         torrentTrackers = launch.torrentTrackers,
                         initialPositionMs = launch.initialPositionMs,
                         initialProgressFraction = launch.initialProgressFraction,
@@ -2467,16 +2540,15 @@ private fun MainAppContent(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                composable<CatalogRoute> { backStackEntry ->
+                composable<CatalogRoute>(
+                    typeMap = mapOf(typeOf<CatalogTargetKind>() to CatalogTargetKindNavType),
+                ) { backStackEntry ->
                     val route = backStackEntry.toRoute<CatalogRoute>()
+                    val target = route.toCatalogTarget()
                     CatalogScreen(
                         title = route.title,
                         subtitle = route.subtitle,
-                        manifestUrl = route.manifestUrl,
-                        type = route.type,
-                        catalogId = route.catalogId,
-                        supportsPagination = route.supportsPagination,
-                        genre = route.genre,
+                        target = target,
                         onBack = {
                             CatalogRepository.clear()
                             navController.popBackStack()
@@ -2486,11 +2558,11 @@ private fun MainAppContent(
                         },
                         onPosterLongClick = { meta ->
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            selectedPosterActionTarget = if (route.manifestUrl == INTERNAL_LIBRARY_MANIFEST_URL) {
+                            selectedPosterActionTarget = if (target is CatalogTarget.Library) {
                                 PosterActionTarget(
                                     preview = meta,
                                     libraryItem = meta.toLibraryItem(savedAtEpochMs = 0L),
-                                    libraryListKey = route.catalogId,
+                                    libraryListKey = target.sectionType,
                                 )
                             } else {
                                 PosterActionTarget(preview = meta)

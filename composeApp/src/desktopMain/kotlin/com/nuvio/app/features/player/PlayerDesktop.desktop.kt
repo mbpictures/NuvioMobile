@@ -27,6 +27,7 @@ internal actual object DeviceLanguagePreferences {
 internal actual object PlayerSettingsStorage {
     private const val preferencesName = "nuvio_player_settings"
     private const val showLoadingOverlayKey = "show_loading_overlay"
+    private const val touchGesturesEnabledKey = "touch_gestures_enabled"
     private const val resizeModeKey = "resize_mode"
     private const val holdToSpeedEnabledKey = "hold_to_speed_enabled"
     private const val holdToSpeedValueKey = "hold_to_speed_value"
@@ -89,6 +90,7 @@ internal actual object PlayerSettingsStorage {
     private const val iosAudioOutputModeKey = "ios_audio_output_mode"
     private val syncKeys = listOf(
         showLoadingOverlayKey,
+        touchGesturesEnabledKey,
         resizeModeKey,
         holdToSpeedEnabledKey,
         holdToSpeedValueKey,
@@ -155,6 +157,12 @@ internal actual object PlayerSettingsStorage {
 
     actual fun saveShowLoadingOverlay(enabled: Boolean) {
         saveBoolean(showLoadingOverlayKey, enabled)
+    }
+
+    actual fun loadTouchGesturesEnabled(): Boolean? = loadBoolean(touchGesturesEnabledKey)
+
+    actual fun saveTouchGesturesEnabled(enabled: Boolean) {
+        saveBoolean(touchGesturesEnabledKey, enabled)
     }
 
     actual fun loadResizeMode(): String? = loadString(resizeModeKey)
@@ -477,6 +485,7 @@ internal actual object PlayerSettingsStorage {
 
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
         loadShowLoadingOverlay()?.let { put(showLoadingOverlayKey, encodeSyncBoolean(it)) }
+        loadTouchGesturesEnabled()?.let { put(touchGesturesEnabledKey, encodeSyncBoolean(it)) }
         loadResizeMode()?.let { put(resizeModeKey, encodeSyncString(it)) }
         loadHoldToSpeedEnabled()?.let { put(holdToSpeedEnabledKey, encodeSyncBoolean(it)) }
         loadHoldToSpeedValue()?.let { put(holdToSpeedValueKey, encodeSyncFloat(it)) }
@@ -524,6 +533,7 @@ internal actual object PlayerSettingsStorage {
         syncKeys.forEach { DesktopPreferences.remove(preferencesName, ProfileScopedKey.of(it)) }
 
         payload.decodeSyncBoolean(showLoadingOverlayKey)?.let(::saveShowLoadingOverlay)
+        payload.decodeSyncBoolean(touchGesturesEnabledKey)?.let(::saveTouchGesturesEnabled)
         payload.decodeSyncString(resizeModeKey)?.let(::saveResizeMode)
         payload.decodeSyncBoolean(holdToSpeedEnabledKey)?.let(::saveHoldToSpeedEnabled)
         payload.decodeSyncFloat(holdToSpeedValueKey)?.let(::saveHoldToSpeedValue)

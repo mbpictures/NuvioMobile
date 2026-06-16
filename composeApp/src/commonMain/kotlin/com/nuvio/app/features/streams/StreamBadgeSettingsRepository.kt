@@ -1,5 +1,9 @@
 package com.nuvio.app.features.streams
 
+import com.nuvio.app.core.i18n.localizedBadgeEnterUrl
+import com.nuvio.app.core.i18n.localizedBadgeImportFailed
+import com.nuvio.app.core.i18n.localizedBadgeImportLimit
+import com.nuvio.app.core.i18n.localizedBadgeUrlSchemeInvalid
 import com.nuvio.app.features.addons.httpGetText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +19,7 @@ import kotlinx.serialization.json.Json
 data class StreamBadgeSettingsUiState(
     val rules: StreamBadgeRules = StreamBadgeRules(),
     val showFileSizeBadges: Boolean = true,
+    val showAddonLogo: Boolean = false,
     val badgePlacement: StreamBadgePlacement = StreamBadgePlacement.BOTTOM,
 )
 
@@ -36,6 +41,7 @@ object StreamBadgeSettingsRepository {
     private var hasLoaded = false
     private var streamBadgeRules = StreamBadgeRules()
     private var showFileSizeBadges = true
+    private var showAddonLogo = false
     private var badgePlacement = StreamBadgePlacement.BOTTOM
 
     fun ensureLoaded() {
@@ -51,6 +57,7 @@ object StreamBadgeSettingsRepository {
         hasLoaded = false
         streamBadgeRules = StreamBadgeRules()
         showFileSizeBadges = true
+        showAddonLogo = false
         badgePlacement = StreamBadgePlacement.BOTTOM
         _uiState.value = StreamBadgeSettingsUiState()
     }
@@ -74,12 +81,12 @@ object StreamBadgeSettingsRepository {
         ensureLoaded()
         val normalizedUrl = url.trim()
         if (normalizedUrl.isBlank()) {
-            return StreamBadgeImportResult.Error("Enter a badge JSON URL.")
+            return StreamBadgeImportResult.Error(localizedBadgeEnterUrl())
         }
         if (!normalizedUrl.startsWith("https://", ignoreCase = true) &&
             !normalizedUrl.startsWith("http://", ignoreCase = true)
         ) {
-            return StreamBadgeImportResult.Error("Badge URL must start with http:// or https://.")
+            return StreamBadgeImportResult.Error(localizedBadgeUrlSchemeInvalid())
         }
 
         return try {
@@ -88,7 +95,7 @@ object StreamBadgeSettingsRepository {
                 import.sourceUrl.equals(normalizedUrl, ignoreCase = true)
             }
             if (!isExistingImport && currentRules.imports.size >= STREAM_BADGE_IMPORT_LIMIT) {
-                return StreamBadgeImportResult.Error("You can import up to $STREAM_BADGE_IMPORT_LIMIT badge URLs.")
+                return StreamBadgeImportResult.Error(localizedBadgeImportLimit(STREAM_BADGE_IMPORT_LIMIT))
             }
             val payload = httpGetText(normalizedUrl)
             val parsedImport = StreamBadgeRulesParser.parse(
@@ -101,7 +108,7 @@ object StreamBadgeSettingsRepository {
             StreamBadgeImportResult.Success(streamBadgeRules)
         } catch (error: Exception) {
             if (error is CancellationException) throw error
-            StreamBadgeImportResult.Error(error.message ?: "Badge import failed.")
+            StreamBadgeImportResult.Error(error.message ?: localizedBadgeImportFailed())
         }
     }
 
@@ -133,6 +140,14 @@ object StreamBadgeSettingsRepository {
         StreamBadgeSettingsStorage.saveShowFileSizeBadges(enabled)
     }
 
+    fun setShowAddonLogo(enabled: Boolean) {
+        ensureLoaded()
+        if (showAddonLogo == enabled) return
+        showAddonLogo = enabled
+        publish()
+        StreamBadgeSettingsStorage.saveShowAddonLogo(enabled)
+    }
+
     fun setBadgePlacement(placement: StreamBadgePlacement) {
         ensureLoaded()
         if (badgePlacement == placement) return
@@ -151,6 +166,7 @@ object StreamBadgeSettingsRepository {
         }
         streamBadgeRules = storedRules ?: legacyRules ?: StreamBadgeRules()
         showFileSizeBadges = StreamBadgeSettingsStorage.loadShowFileSizeBadges() ?: true
+        showAddonLogo = StreamBadgeSettingsStorage.loadShowAddonLogo() ?: false
         badgePlacement = StreamBadgeSettingsStorage.loadStreamBadgePlacement()
             ?.let { storedPlacement ->
                 StreamBadgePlacement.entries.firstOrNull { placement ->
@@ -169,6 +185,7 @@ object StreamBadgeSettingsRepository {
         _uiState.value = StreamBadgeSettingsUiState(
             rules = streamBadgeRules,
             showFileSizeBadges = showFileSizeBadges,
+            showAddonLogo = showAddonLogo,
             badgePlacement = badgePlacement,
         )
     }

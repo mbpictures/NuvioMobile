@@ -29,8 +29,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
-private const val ChevronScrollItemCount = 4
-
 @Composable
 internal actual fun BoxScope.NuvioShelfRowChevrons(
     state: LazyListState,
@@ -52,8 +50,8 @@ internal actual fun BoxScope.NuvioShelfRowChevrons(
             icon = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
             onClick = {
                 scope.launch {
-                    val target = (state.firstVisibleItemIndex - ChevronScrollItemCount)
-                        .coerceAtLeast(0)
+                    val pageSize = (state.layoutInfo.visibleItemsInfo.size - 1).coerceAtLeast(1)
+                    val target = (state.firstVisibleItemIndex - pageSize).coerceAtLeast(0)
                     state.animateScrollToItem(target)
                 }
             },
@@ -72,7 +70,10 @@ internal actual fun BoxScope.NuvioShelfRowChevrons(
             icon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
             onClick = {
                 scope.launch {
-                    val target = state.firstVisibleItemIndex + ChevronScrollItemCount
+                    val info = state.layoutInfo
+                    val pageSize = (info.visibleItemsInfo.size - 1).coerceAtLeast(1)
+                    val lastIndex = (info.totalItemsCount - 1).coerceAtLeast(0)
+                    val target = (state.firstVisibleItemIndex + pageSize).coerceAtMost(lastIndex)
                     state.animateScrollToItem(target)
                 }
             },

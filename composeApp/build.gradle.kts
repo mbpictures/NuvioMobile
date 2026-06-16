@@ -369,6 +369,10 @@ afterEvaluate {
     }
 }
 
+configurations.matching { it.name == "iosMainImplementation" }.configureEach {
+    project.dependencies.add(name, libs.ktor.client.darwin)
+}
+
 dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     debugImplementation(libs.compose.uiTooling)
@@ -721,14 +725,6 @@ android {
     sourceSets.getByName("full") {
         manifest.srcFile("src/androidFull/AndroidManifest.xml")
         java.srcDir(fullCommonSourceDir)
-    }
-    splits {
-        abi {
-            isEnable = !isAndroidAppBundleBuild
-            reset()
-            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
-            isUniversalApk = false
-        }
     }
     packaging {
         resources {

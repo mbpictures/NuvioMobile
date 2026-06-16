@@ -50,7 +50,6 @@ import com.nuvio.app.features.details.components.DetailTrailersSection
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.library.LibraryRepository
 import com.nuvio.app.features.library.toLibraryItem
-import com.nuvio.app.features.streams.AddonStreamWarmupRepository
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsScreen
 import com.nuvio.app.features.watched.WatchedRepository
@@ -213,15 +212,6 @@ internal fun MetaDetailsScreenDesktop(
                         episodeThumbnail = null,
                         pauseDescription = meta.description,
                         resumePositionMs = movieProgress?.lastPositionMs,
-                    )
-                }
-
-                LaunchedEffect(meta.type, meta.id, isSeriesLike) {
-                    AddonStreamWarmupRepository.preload(
-                        type = meta.type,
-                        videoId = meta.id,
-                        season = null,
-                        episode = null,
                     )
                 }
 
