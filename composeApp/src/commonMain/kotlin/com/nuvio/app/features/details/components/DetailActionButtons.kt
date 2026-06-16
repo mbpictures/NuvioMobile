@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,8 +35,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -80,13 +83,35 @@ fun DetailActionButtons(
         label = "detail_action_menu_progress",
     )
     val hasSecondaryActions = secondaryActions.isNotEmpty()
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.titleMedium
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .widthIn(max = if (isTablet) 520.dp else 420.dp)
             .fillMaxWidth()
             .height(buttonHeight),
     ) {
+        // On desktop the secondary actions are shown expanded with their labels. If the
+        // available width can't fit every label, fall back to icon-only buttons so the
+        // labels never get truncated or overflow.
+        val showLabels = if (isDesktop && hasSecondaryActions) {
+            val requiredWidth = secondaryActions.fold(0.dp) { acc, action ->
+                val textWidthPx = textMeasurer.measure(
+                    text = action.label,
+                    style = labelStyle,
+                    maxLines = 1,
+                    softWrap = false,
+                ).size.width
+                val textWidth = with(density) { textWidthPx.toDp() }
+                acc + LabelPillHorizontalPadding * 2 + LabelPillIconSize + LabelPillIconSpacing + textWidth
+            } + SecondaryActionSpacing * (secondaryActions.size - 1)
+            requiredWidth <= maxWidth
+        } else {
+            false
+        }
+
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -155,14 +180,15 @@ fun DetailActionButtons(
                     }
                     if (isDesktop) {
                         // Desktop never collapses the menu, so render every action fully
-                        // expanded with its label shown inline instead of hidden behind a toggle.
+                        // expanded. Labels are shown inline when they all fit, otherwise we
+                        // fall back to icon-only buttons (see showLabels above).
                         DetailIconAction(
                             label = action.label,
                             icon = action.icon,
                             active = action.isActive,
                             progress = 1f,
                             size = iconButtonSize,
-                            showLabel = true,
+                            showLabel = showLabels,
                             onClick = onActionClick,
                             onLongClick = onActionLongClick,
                         )
@@ -191,7 +217,7 @@ fun DetailActionButtons(
                     }
 
                     if (index != secondaryActions.lastIndex) {
-                        Spacer(modifier = Modifier.width(if (isDesktop) 12.dp else 12.dp * menuProgress))
+                        Spacer(modifier = Modifier.width(if (isDesktop) SecondaryActionSpacing else 12.dp * menuProgress))
                     }
                 }
                 if (!isDesktop) {
@@ -284,16 +310,16 @@ private fun DetailIconAction(
                         onLongClick = onLongClick,
                         role = Role.Button,
                     )
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = LabelPillHorizontalPadding),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(21.dp),
+                    modifier = Modifier.size(LabelPillIconSize),
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(LabelPillIconSpacing))
                 Text(
                     text = label,
                     style = MaterialTheme.typography.titleMedium,
@@ -316,9 +342,16 @@ private fun DetailIconAction(
                 Icon(
                     imageVector = icon,
                     contentDescription = label,
-                    modifier = Modifier.size(21.dp),
+                    modifier = Modifier.size(LabelPillIconSize),
                 )
             }
         }
     }
 }
+
+// Geometry of a labeled secondary-action pill, shared between rendering and the
+// width measurement that decides whether labels fit on desktop.
+private val LabelPillHorizontalPadding = 20.dp
+private val LabelPillIconSize = 21.dp
+private val LabelPillIconSpacing = 8.dp
+private val SecondaryActionSpacing = 12.dp
