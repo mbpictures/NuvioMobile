@@ -69,6 +69,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import kotlin.reflect.typeOf
 import coil3.ImageLoader
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.request.CachePolicy
@@ -111,6 +112,7 @@ import com.nuvio.app.features.catalog.CatalogRepository
 import com.nuvio.app.features.catalog.CatalogScreen
 import com.nuvio.app.features.catalog.CatalogTarget
 import com.nuvio.app.features.catalog.CatalogTargetKind
+import com.nuvio.app.features.catalog.CatalogTargetKindNavType
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.CloudLibraryFile
 import com.nuvio.app.features.cloud.CloudLibraryItem
@@ -2538,7 +2540,9 @@ private fun MainAppContent(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                composable<CatalogRoute> { backStackEntry ->
+                composable<CatalogRoute>(
+                    typeMap = mapOf(typeOf<CatalogTargetKind>() to CatalogTargetKindNavType),
+                ) { backStackEntry ->
                     val route = backStackEntry.toRoute<CatalogRoute>()
                     val target = route.toCatalogTarget()
                     CatalogScreen(
