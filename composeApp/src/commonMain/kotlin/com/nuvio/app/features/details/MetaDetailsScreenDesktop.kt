@@ -18,6 +18,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,8 +59,11 @@ import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsScreen
 import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.features.watched.WatchedRepository
+import com.nuvio.app.features.watching.application.WatchingActions
+import com.nuvio.app.features.watching.application.WatchingState
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
+import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_retry
 import nuvio.composeapp.generated.resources.action_saved
@@ -66,6 +72,8 @@ import nuvio.composeapp.generated.resources.details_check_connection
 import nuvio.composeapp.generated.resources.details_failed_to_load
 import nuvio.composeapp.generated.resources.details_more_like_this
 import nuvio.composeapp.generated.resources.details_servers_unreachable
+import nuvio.composeapp.generated.resources.hero_mark_unwatched
+import nuvio.composeapp.generated.resources.hero_mark_watched
 import nuvio.composeapp.generated.resources.streams_select_episode_prompt
 import org.jetbrains.compose.resources.stringResource
 
@@ -84,6 +92,7 @@ internal fun MetaDetailsScreenDesktop(
     modifier: Modifier = Modifier,
 ) {
     val localDensity = LocalDensity.current
+    val detailsScope = rememberCoroutineScope()
     var metaHeight by remember {
         mutableStateOf(0.dp)
     }
@@ -197,6 +206,21 @@ internal fun MetaDetailsScreenDesktop(
                     meta.id,
                     meta.type,
                 ) { LibraryRepository.isSaved(meta.id, meta.type) }
+                val metaPreview = remember(meta) { meta.toMetaPreview() }
+                val isWatched = remember(watchedUiState.watchedKeys, metaPreview) {
+                    WatchingState.isPosterWatched(
+                        watchedKeys = watchedUiState.watchedKeys,
+                        item = metaPreview,
+                    )
+                }
+                val toggleWatched = remember(metaPreview) {
+                    {
+                        detailsScope.launch {
+                            WatchingActions.togglePosterWatched(metaPreview)
+                        }
+                        Unit
+                    }
+                }
                 val progressByVideoId = remember(watchProgressUiState.entries) {
                     watchProgressUiState.byVideoId
                 }
@@ -303,6 +327,20 @@ internal fun MetaDetailsScreenDesktop(
                         ) {
                             DetailActionButtons(
                                 secondaryActions = listOf(
+                                    DetailSecondaryAction(
+                                        label = if (isWatched) {
+                                            stringResource(Res.string.hero_mark_unwatched)
+                                        } else {
+                                            stringResource(Res.string.hero_mark_watched)
+                                        },
+                                        icon = if (isWatched) {
+                                            Icons.Default.CheckCircle
+                                        } else {
+                                            Icons.Default.CheckCircleOutline
+                                        },
+                                        isActive = isWatched,
+                                        onClick = toggleWatched,
+                                    ),
                                     DetailSecondaryAction(
                                         label = if (isSaved) {
                                             stringResource(Res.string.action_saved)

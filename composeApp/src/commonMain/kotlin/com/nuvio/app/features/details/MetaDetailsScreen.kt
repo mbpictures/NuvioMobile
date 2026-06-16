@@ -1316,7 +1316,7 @@ internal fun extractTmdbId(value: String?): Int? {
         ?.toIntOrNull()
 }
 
-private fun MetaDetails.toMetaPreview(): MetaPreview =
+internal fun MetaDetails.toMetaPreview(): MetaPreview =
     MetaPreview(
         id = id,
         type = type,
