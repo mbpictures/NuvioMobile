@@ -1249,7 +1249,7 @@ internal fun MetaDetailsScreenMobile(
     }
 }
 
-private fun MetaDetails.isSeriesLikeForEpisodeRatings(): Boolean {
+internal fun MetaDetails.isSeriesLikeForEpisodeRatings(): Boolean {
     val normalizedType = type.trim().lowercase()
     val hasNumberedEpisodes = videos.any { it.season != null && it.episode != null }
     return hasNumberedEpisodes && normalizedType in setOf("series", "show", "tv", "tvshow")
@@ -1298,14 +1298,14 @@ private fun areEpisodesWatchedForActions(
     )
 }
 
-private fun extractImdbId(value: String?): String? =
+internal fun extractImdbId(value: String?): String? =
     value
         ?.trim()
         ?.split(':', '/', '?', '&')
         ?.firstOrNull { part -> part.startsWith("tt", ignoreCase = true) }
         ?.takeIf { it.length > 2 }
 
-private fun extractTmdbId(value: String?): Int? {
+internal fun extractTmdbId(value: String?): Int? {
     val trimmed = value?.trim().orEmpty()
     if (trimmed.isBlank()) return null
     return trimmed

@@ -52,6 +52,7 @@ import com.nuvio.app.features.library.LibraryRepository
 import com.nuvio.app.features.library.toLibraryItem
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsScreen
+import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
@@ -195,6 +196,29 @@ internal fun MetaDetailsScreenDesktop(
                 }
                 val movieProgress = progressByVideoId[meta.id]?.takeUnless { it.isCompleted }
 
+                var episodeImdbRatings by remember(meta.id, meta.type) {
+                    mutableStateOf<Map<Pair<Int, Int>, Double>>(emptyMap())
+                }
+                LaunchedEffect(meta.id, meta.videos) {
+                    if (!meta.isSeriesLikeForEpisodeRatings()) {
+                        episodeImdbRatings = emptyMap()
+                        return@LaunchedEffect
+                    }
+                    val imdbId = extractImdbId(meta.id) ?: extractImdbId(id)
+                    val tmdbId = extractTmdbId(meta.id)
+                        ?: extractTmdbId(id)
+                        ?: TmdbService.ensureTmdbId(meta.id, meta.type)?.toIntOrNull()
+                        ?: TmdbService.ensureTmdbId(id, type)?.toIntOrNull()
+                    if (imdbId == null && tmdbId == null) {
+                        episodeImdbRatings = emptyMap()
+                        return@LaunchedEffect
+                    }
+                    episodeImdbRatings = ImdbEpisodeRatingsRepository.getEpisodeRatings(
+                        imdbId = imdbId,
+                        tmdbId = tmdbId,
+                    )
+                }
+
                 LaunchedEffect(meta.id, meta.type, isSeriesLike, movieProgress?.lastPositionMs) {
                     if (isSeriesLike) return@LaunchedEffect
                     selectedPlayable = PlayableTarget(
@@ -294,6 +318,7 @@ internal fun MetaDetailsScreenDesktop(
                                     episodeCardStyle = metaScreenSettingsUiState.episodeCardStyle,
                                     progressByVideoId = progressByVideoId,
                                     watchedKeys = watchedUiState.watchedKeys,
+                                    episodeRatings = episodeImdbRatings,
                                     blurUnwatchedEpisodes = metaScreenSettingsUiState.blurUnwatchedEpisodes,
                                     onEpisodeClick = onEpisodeClick,
                                 )
