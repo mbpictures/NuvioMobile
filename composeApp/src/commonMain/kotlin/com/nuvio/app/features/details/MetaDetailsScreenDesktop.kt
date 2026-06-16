@@ -30,6 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -81,6 +83,10 @@ internal fun MetaDetailsScreenDesktop(
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     modifier: Modifier = Modifier,
 ) {
+    val localDensity = LocalDensity.current
+    var metaHeight by remember {
+        mutableStateOf(0.dp)
+    }
     val uiState by MetaDetailsRepository.uiState.collectAsStateWithLifecycle()
     val displayedMeta = uiState.meta?.takeIf { it.type == type && it.id == id }
         ?: MetaDetailsRepository.peek(type, id)
@@ -288,7 +294,11 @@ internal fun MetaDetailsScreenDesktop(
                         horizontalArrangement = Arrangement.spacedBy(32.dp),
                     ) {
                         Column(
-                            modifier = Modifier.weight(0.55f),
+                            modifier = Modifier
+                                .weight(0.55f)
+                                .onGloballyPositioned{ coordinates ->
+                                    metaHeight = with(localDensity) { coordinates.size.height.toDp() }
+                                },
                             verticalArrangement = Arrangement.spacedBy(24.dp),
                         ) {
                             DetailActionButtons(
@@ -366,7 +376,7 @@ internal fun MetaDetailsScreenDesktop(
                             Spacer(modifier = Modifier.height(32.dp))
                         }
 
-                        Box(modifier = Modifier.weight(0.45f)) {
+                        Box(modifier = Modifier.weight(0.45f).height(metaHeight).verticalScroll(rememberScrollState())) {
                             val target = selectedPlayable
                             if (target != null) {
                                 StreamsScreen(
