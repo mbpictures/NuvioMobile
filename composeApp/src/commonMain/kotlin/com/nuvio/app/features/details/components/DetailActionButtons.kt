@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.AppIconResource
 import com.nuvio.app.core.ui.appIconPainter
 import com.nuvio.app.core.ui.nuvioSecondaryClick
+import com.nuvio.app.isDesktop
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_play
 import nuvio.composeapp.generated.resources.details_actions_menu_label
@@ -141,44 +143,65 @@ fun DetailActionButtons(
                     Spacer(modifier = Modifier.width(12.dp))
                 }
                 secondaryActions.forEachIndexed { index, action ->
-                    Box(
-                        modifier = Modifier
-                            .width(iconButtonSize * menuProgress)
-                            .height(iconButtonSize)
-                            .graphicsLayer {
-                                clip = true
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (actionsExpanded || menuProgress > 0.01f) {
-                            DetailIconAction(
-                                label = action.label,
-                                icon = action.icon,
-                                active = action.isActive,
-                                progress = menuProgress,
-                                size = iconButtonSize,
-                                onClick = {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    action.onClick()
+                    val onActionClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        action.onClick()
+                    }
+                    val onActionLongClick = action.onLongClick?.let { longClick ->
+                        {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            longClick()
+                        }
+                    }
+                    if (isDesktop) {
+                        // Desktop never collapses the menu, so render every action fully
+                        // expanded with its label shown inline instead of hidden behind a toggle.
+                        DetailIconAction(
+                            label = action.label,
+                            icon = action.icon,
+                            active = action.isActive,
+                            progress = 1f,
+                            size = iconButtonSize,
+                            showLabel = true,
+                            onClick = onActionClick,
+                            onLongClick = onActionLongClick,
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .width(iconButtonSize * menuProgress)
+                                .height(iconButtonSize)
+                                .graphicsLayer {
+                                    clip = true
                                 },
-                                onLongClick = action.onLongClick?.let { longClick ->
-                                    {
-                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        longClick()
-                                    }
-                                },
-                            )
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (actionsExpanded || menuProgress > 0.01f) {
+                                DetailIconAction(
+                                    label = action.label,
+                                    icon = action.icon,
+                                    active = action.isActive,
+                                    progress = menuProgress,
+                                    size = iconButtonSize,
+                                    onClick = onActionClick,
+                                    onLongClick = onActionLongClick,
+                                )
+                            }
                         }
                     }
 
                     if (index != secondaryActions.lastIndex) {
-                        Spacer(modifier = Modifier.width(12.dp * menuProgress))
+                        Spacer(modifier = Modifier.width(if (isDesktop) 12.dp else 12.dp * menuProgress))
                     }
                 }
-                Spacer(modifier = Modifier.width(12.dp * menuProgress))
+                if (!isDesktop) {
+                    Spacer(modifier = Modifier.width(12.dp * menuProgress))
+                }
             }
 
-            if (hasSecondaryActions) {
+            // The expand/collapse toggle is only needed on touch platforms; desktop
+            // always shows the actions inline (see above), so omit the toggle there.
+            if (hasSecondaryActions && !isDesktop) {
                 Surface(
                     modifier = Modifier.size(iconButtonSize),
                     shape = CircleShape,
@@ -228,6 +251,7 @@ private fun DetailIconAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp,
+    showLabel: Boolean = false,
     onLongClick: (() -> Unit)? = null,
 ) {
     Surface(
@@ -236,7 +260,7 @@ private fun DetailIconAction(
             scaleX = 0.86f + (0.14f * progress)
             scaleY = 0.86f + (0.14f * progress)
         },
-        shape = CircleShape,
+        shape = if (showLabel) RoundedCornerShape(40.dp) else CircleShape,
         color = if (active) {
             MaterialTheme.colorScheme.onBackground
         } else {
@@ -250,22 +274,51 @@ private fun DetailIconAction(
         tonalElevation = 6.dp,
         shadowElevation = 8.dp,
     ) {
-        Box(
-            modifier = Modifier
-                .size(size)
-                .nuvioSecondaryClick(onLongClick)
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongClick,
-                    role = Role.Button,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                modifier = Modifier.size(21.dp),
-            )
+        if (showLabel) {
+            Row(
+                modifier = Modifier
+                    .height(size)
+                    .nuvioSecondaryClick(onLongClick)
+                    .combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick,
+                        role = Role.Button,
+                    )
+                    .padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(21.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .nuvioSecondaryClick(onLongClick)
+                    .combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick,
+                        role = Role.Button,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    modifier = Modifier.size(21.dp),
+                )
+            }
         }
     }
 }
