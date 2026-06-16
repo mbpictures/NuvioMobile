@@ -29,6 +29,7 @@ internal actual object DebridSettingsStorage {
     private const val streamPreferencesKey = "debrid_stream_preferences"
     private const val streamNameTemplateKey = "debrid_stream_name_template"
     private const val streamDescriptionTemplateKey = "debrid_stream_description_template"
+    private const val pendingDeviceAuthorizationPrefix = "debrid_pending_device_authorization_"
 
     private fun syncKeys(): List<String> =
         listOf(
@@ -82,6 +83,17 @@ internal actual object DebridSettingsStorage {
 
     actual fun saveRealDebridApiKey(apiKey: String) {
         saveProviderApiKey(DebridProviders.REAL_DEBRID_ID, apiKey)
+    }
+
+    actual fun loadPendingDeviceAuthorization(providerId: String): String? =
+        loadString(pendingDeviceAuthorizationKey(providerId))
+
+    actual fun savePendingDeviceAuthorization(providerId: String, payload: String) {
+        saveString(pendingDeviceAuthorizationKey(providerId), payload)
+    }
+
+    actual fun clearPendingDeviceAuthorization(providerId: String) {
+        DesktopPreferences.remove(preferencesName, scopedKey(pendingDeviceAuthorizationKey(providerId)))
     }
 
     actual fun loadInstantPlaybackPreparationLimit(): Int? = loadInt(instantPlaybackPreparationLimitKey)
@@ -219,5 +231,11 @@ internal actual object DebridSettingsStorage {
             DebridProviders.REAL_DEBRID_ID -> realDebridApiKeyKey
             else -> "debrid_${normalized}_api_key"
         }
+    }
+
+    private fun pendingDeviceAuthorizationKey(providerId: String): String {
+        val normalized = DebridProviders.byId(providerId)?.id
+            ?: providerId.trim().lowercase().replace(Regex("[^a-z0-9_]+"), "_")
+        return "$pendingDeviceAuthorizationPrefix$normalized"
     }
 }
