@@ -148,8 +148,6 @@ fun StreamsScreen(
     val noDirectStreamLinkText = stringResource(Res.string.streams_no_direct_link)
     var streamActionsTarget by remember(videoId) { mutableStateOf<StreamItem?>(null) }
     var preferredFilterApplied by remember(videoId) { mutableStateOf(false) }
-    var autoPlayOverlayLogoLoadError by remember(logo) { mutableStateOf(false) }
-    val autoPlayOverlayLogoUrl = logo?.takeIf { it.isNotBlank() }
     val storedProgress = if (startFromBeginning) {
         null
     } else {
@@ -313,57 +311,6 @@ fun StreamsScreen(
                         contentDescription = stringResource(Res.string.streams_refresh),
                         tint = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = uiState.showDirectAutoPlayOverlay,
-            enter = fadeIn(animationSpec = tween(250)),
-            exit = fadeOut(animationSpec = tween(200)),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.85f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    if (autoPlayOverlayLogoUrl != null && !autoPlayOverlayLogoLoadError) {
-                        AsyncImage(
-                            model = autoPlayOverlayLogoUrl,
-                            contentDescription = title,
-                            modifier = Modifier
-                                .height(48.dp),
-                            contentScale = ContentScale.Fit,
-                            onError = { autoPlayOverlayLogoLoadError = true },
-                        )
-                    } else if (title.isNotBlank()) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
-                            color = Color.White,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 24.dp),
-                        )
-                    }
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(32.dp),
-                        color = Color.White,
-                        strokeWidth = 2.5.dp,
-                    )
-                    Text(
-                        text = uiState.overlayMessage
-                            ?: stringResource(Res.string.streams_finding_source),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.8f),
                     )
                 }
             }
