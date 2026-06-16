@@ -156,6 +156,13 @@ internal class PlayerScreenRuntime(
     var hasSentCompletionScrobbleForCurrentItem by mutableStateOf(false)
     var currentTraktScrobbleItem by mutableStateOf<TraktScrobbleItem?>(null)
 
+    // A reused player engine (iOS/desktop MPV keeps one instance and swaps the file) keeps
+    // polling the previous file's EOF/position for a few cycles after a new source is requested.
+    // While true, stale "ended" frames are dropped so they can't be attributed to the episode we
+    // just switched to (which would scrobble/mark it watched instantly). Cleared on the first
+    // real frame from the new source.
+    var awaitingFreshPlaybackSnapshot by mutableStateOf(false)
+
     var showSourcesPanel by mutableStateOf(false)
     var showEpisodesPanel by mutableStateOf(false)
     var showSubmitIntroModal by mutableStateOf(false)

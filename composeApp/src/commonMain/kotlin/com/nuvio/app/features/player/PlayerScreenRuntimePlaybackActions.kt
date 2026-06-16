@@ -48,6 +48,7 @@ internal fun PlayerScreenRuntime.resetIdentityStateIfNeeded() {
         lastResetPlaybackIdentity = identity
         shouldPlay = true
         initialLoadCompleted = false
+        awaitingFreshPlaybackSnapshot = true
         speedBoostRestoreSpeed = null
         isHoldToSpeedGestureActive = false
         initialSeekApplied = activeInitialPositionMs <= 0L &&

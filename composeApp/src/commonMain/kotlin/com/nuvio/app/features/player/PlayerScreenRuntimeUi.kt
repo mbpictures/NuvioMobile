@@ -206,11 +206,19 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                 onSnapshot = { snapshot ->
                     // While casting, the receiver is the source of truth (mirrored separately).
                     if (castController?.isCasting != true) {
-                        playbackSnapshot = snapshot
-                        if (!snapshot.isLoading) initialLoadCompleted = true
-                        if (snapshot.isEnded) {
-                            shouldPlay = false
-                            controlsVisible = !playerControlsLocked
+                        if (awaitingFreshPlaybackSnapshot && snapshot.isEnded) {
+                            // Stale EOF frame from the previous file on a reused engine: the new
+                            // source was requested but hasn't loaded yet, so the poll still reports
+                            // the old file at the end. Ignore it — attributing it to the episode we
+                            // just switched to would instantly scrobble/mark it watched.
+                        } else {
+                            awaitingFreshPlaybackSnapshot = false
+                            playbackSnapshot = snapshot
+                            if (!snapshot.isLoading) initialLoadCompleted = true
+                            if (snapshot.isEnded) {
+                                shouldPlay = false
+                                controlsVisible = !playerControlsLocked
+                            }
                         }
                     }
                 },
