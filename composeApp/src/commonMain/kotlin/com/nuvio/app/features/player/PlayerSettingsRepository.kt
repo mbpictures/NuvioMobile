@@ -1,6 +1,7 @@
 package com.nuvio.app.features.player
 
 import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.features.player.skip.IntroDbProvider
 import com.nuvio.app.features.player.skip.NextEpisodeThresholdMode
 import com.nuvio.app.features.streams.StreamAutoPlayMode
 import com.nuvio.app.features.streams.StreamAutoPlaySource
@@ -61,6 +62,7 @@ data class PlayerSettingsUiState(
     val animeSkipEnabled: Boolean = false,
     val animeSkipClientId: String = "",
     val introDbApiKey: String = "",
+    val introDbProvider: IntroDbProvider = IntroDbProvider.BOTH,
     val introSubmitEnabled: Boolean = false,
     val streamAutoPlayNextEpisodeEnabled: Boolean = false,
     val streamAutoPlayPreferBingeGroup: Boolean = true,
@@ -121,6 +123,7 @@ object PlayerSettingsRepository {
     private var animeSkipEnabled = false
     private var animeSkipClientId = ""
     private var introDbApiKey = ""
+    private var introDbProvider = IntroDbProvider.BOTH
     private var introSubmitEnabled = false
     private var streamAutoPlayNextEpisodeEnabled = false
     private var streamAutoPlayPreferBingeGroup = true
@@ -186,6 +189,7 @@ object PlayerSettingsRepository {
         animeSkipEnabled = false
         animeSkipClientId = ""
         introDbApiKey = ""
+        introDbProvider = IntroDbProvider.BOTH
         introSubmitEnabled = false
         streamAutoPlayNextEpisodeEnabled = false
         streamAutoPlayPreferBingeGroup = true
@@ -299,6 +303,9 @@ object PlayerSettingsRepository {
         animeSkipEnabled = PlayerSettingsStorage.loadAnimeSkipEnabled() ?: false
         animeSkipClientId = PlayerSettingsStorage.loadAnimeSkipClientId() ?: ""
         introDbApiKey = PlayerSettingsStorage.loadIntroDbApiKey() ?: ""
+        introDbProvider = PlayerSettingsStorage.loadIntroDbProvider()
+            ?.let { runCatching { IntroDbProvider.valueOf(it) }.getOrNull() }
+            ?: IntroDbProvider.BOTH
         introSubmitEnabled = PlayerSettingsStorage.loadIntroSubmitEnabled() ?: false
         streamAutoPlayNextEpisodeEnabled = PlayerSettingsStorage.loadStreamAutoPlayNextEpisodeEnabled() ?: false
         streamAutoPlayPreferBingeGroup = PlayerSettingsStorage.loadStreamAutoPlayPreferBingeGroup() ?: true
@@ -597,6 +604,16 @@ object PlayerSettingsRepository {
         PlayerSettingsStorage.saveIntroDbApiKey(apiKey)
     }
 
+    fun setIntroDbProvider(provider: IntroDbProvider) {
+        ensureLoaded()
+        if (introDbProvider == provider) return
+        introDbProvider = provider
+        publish()
+        PlayerSettingsStorage.saveIntroDbProvider(provider.name)
+        // Drop cached segments so the newly selected source is used right away.
+        com.nuvio.app.features.player.skip.SkipIntroRepository.clearCache()
+    }
+
     fun setIntroSubmitEnabled(enabled: Boolean) {
         ensureLoaded()
         if (introSubmitEnabled == enabled) return
@@ -865,6 +882,7 @@ object PlayerSettingsRepository {
             animeSkipEnabled = animeSkipEnabled,
             animeSkipClientId = animeSkipClientId,
             introDbApiKey = introDbApiKey,
+            introDbProvider = introDbProvider,
             introSubmitEnabled = introSubmitEnabled,
             streamAutoPlayNextEpisodeEnabled = streamAutoPlayNextEpisodeEnabled,
             streamAutoPlayPreferBingeGroup = streamAutoPlayPreferBingeGroup,
