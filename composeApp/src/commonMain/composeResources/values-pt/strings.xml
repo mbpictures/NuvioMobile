@@ -811,6 +811,11 @@
     <string name="settings_playback_intro_submit_enabled_description">Mostra um botão para enviares marcas de tempo de introduções/finais para a base de dados da comunidade.</string>
     <string name="settings_playback_introdb_api_key">Chave API do IntroDB</string>
     <string name="settings_playback_introdb_api_key_description">Introduz a tua chave API do IntroDB para enviares marcas de tempo. Obrigatório para a submissão.</string>
+    <string name="settings_playback_introdb_provider">Fonte das marcas de tempo</string>
+    <string name="settings_playback_introdb_provider_description">Escolhe que base de dados fornece as marcas de tempo de introdução, resumo e créditos.</string>
+    <string name="settings_playback_introdb_provider_both">IntroDB + TheIntroDB (reserva)</string>
+    <string name="settings_playback_introdb_provider_introdb">Apenas IntroDB</string>
+    <string name="settings_playback_introdb_provider_theintrodb">Apenas TheIntroDB</string>
     <string name="settings_playback_anime_skip_description">Pesquisa também no AnimeSkip por marcas de tempo para saltar conteúdo (requer ID de cliente).</string>
     <string name="settings_playback_auto_play_next_episode">Reproduzir automaticamente o próximo episódio</string>
     <string name="settings_playback_auto_play_next_episode_description">Inicia o próximo episódio automaticamente assim que o aviso aparecer.</string>

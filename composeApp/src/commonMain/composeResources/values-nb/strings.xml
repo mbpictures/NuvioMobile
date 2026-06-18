@@ -731,6 +731,11 @@
     <string name="settings_playback_intro_submit_enabled_description">Vis en knapp for å sende intro/outro-tidsstempler til fellesskapsdatabasen.</string>
     <string name="settings_playback_introdb_api_key">IntroDB API-nøkkel</string>
     <string name="settings_playback_introdb_api_key_description">Skriv inn din IntroDB API-nøkkel for å sende tidsstempler.</string>
+    <string name="settings_playback_introdb_provider">Kilde for tidsstempler</string>
+    <string name="settings_playback_introdb_provider_description">Velg hvilken database som leverer tidsstempler for intro, sammendrag og outro.</string>
+    <string name="settings_playback_introdb_provider_both">IntroDB + TheIntroDB (reserve)</string>
+    <string name="settings_playback_introdb_provider_introdb">Bare IntroDB</string>
+    <string name="settings_playback_introdb_provider_theintrodb">Bare TheIntroDB</string>
     <string name="settings_playback_anime_skip_description">Søk også i AnimeSkip etter hopp-tidsstempler (krever client ID).</string>
     <string name="settings_playback_auto_play_next_episode">Auto-spill neste episode</string>
     <string name="settings_playback_auto_play_next_episode_description">Start neste episode automatisk når prompt vises.</string>

@@ -664,6 +664,11 @@
     <string name="settings_playback_show_loading_overlay_description">Mostrar la superposición de carga inicial mientras empieza a reproducirse un stream.</string>
     <string name="settings_playback_skip_intro_outro_recap">Saltar intro/outro/resumen</string>
     <string name="settings_playback_skip_intro_outro_recap_description">Mostrar botón de salto durante segmentos detectados de intro, outro y resumen.</string>
+    <string name="settings_playback_introdb_provider">Fuente de marcas de tiempo</string>
+    <string name="settings_playback_introdb_provider_description">Elige qué base de datos proporciona las marcas de tiempo de intro, resumen y outro.</string>
+    <string name="settings_playback_introdb_provider_both">IntroDB + TheIntroDB (respaldo)</string>
+    <string name="settings_playback_introdb_provider_introdb">Solo IntroDB</string>
+    <string name="settings_playback_introdb_provider_theintrodb">Solo TheIntroDB</string>
     <string name="settings_playback_source_scope">Ámbito de fuentes</string>
     <string name="settings_playback_source_scope_all_addons">Todos los complementos</string>
     <string name="settings_playback_source_scope_all_addons_description">Considerar streams de todos los complementos instalados.</string>

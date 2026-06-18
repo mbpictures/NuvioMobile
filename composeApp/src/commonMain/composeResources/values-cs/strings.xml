@@ -642,6 +642,11 @@
     <string name="settings_playback_intro_submit_enabled_description">Zobrazit tlačítko pro odeslání časových značek intra/outra do komunitní databáze.</string>
     <string name="settings_playback_introdb_api_key">IntroDB API klíč</string>
     <string name="settings_playback_introdb_api_key_description">Zadejte svůj IntroDB API klíč pro odesílání časových značek. Vyžadováno pro odesílání.</string>
+    <string name="settings_playback_introdb_provider">Zdroj časových značek</string>
+    <string name="settings_playback_introdb_provider_description">Vyberte, která databáze poskytuje časové značky úvodu, shrnutí a závěrečných titulků.</string>
+    <string name="settings_playback_introdb_provider_both">IntroDB + TheIntroDB (záloha)</string>
+    <string name="settings_playback_introdb_provider_introdb">Pouze IntroDB</string>
+    <string name="settings_playback_introdb_provider_theintrodb">Pouze TheIntroDB</string>
     <string name="settings_playback_anime_skip_description">Hledat také časové značky pro přeskočení v AnimeSkip (vyžaduje klientské ID).</string>
     <string name="settings_playback_auto_play_next_episode">Automaticky přehrát další epizodu</string>
     <string name="settings_playback_auto_play_next_episode_description">Po zobrazení výzvy automaticky spustit další epizodu.</string>
