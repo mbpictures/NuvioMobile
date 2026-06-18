@@ -9,6 +9,8 @@ object SkipIntroRepository {
     private val animeSkipShowIdCache = HashMap<String, String>()
     private const val NO_ID = "__none__"
 
+    private val INTRO_SEGMENT_TYPES = listOf("intro", "recap", "outro")
+
     private val introDbConfigured: Boolean
         get() = IntroDbConfig.URL.isNotBlank()
 
@@ -20,10 +22,8 @@ object SkipIntroRepository {
         val cacheKey = "$imdbId:$season:$episode"
         cache[cacheKey]?.let { return it }
 
-        if (introDbConfigured) {
-            val result = fetchFromIntroDb(imdbId, season, episode)
-            if (result.isNotEmpty()) return result.also { cache[cacheKey] = it }
-        }
+        val introDbResult = fetchIntroDbSegments(imdbId, season, episode)
+        if (introDbResult.isNotEmpty()) return introDbResult.also { cache[cacheKey] = it }
 
         val entries = resolveImdbEntries(imdbId)
         val malId = entries.getOrNull(season - 1)?.myanimelist?.toString()
@@ -64,10 +64,8 @@ object SkipIntroRepository {
             val entries = resolveImdbEntries(imdbId)
             val season = entries.indexOfFirst { it.myanimelist == malId.toIntOrNull() } + 1
 
-            if (introDbConfigured) {
-                val result = fetchFromIntroDb(imdbId, season, episode)
-                if (result.isNotEmpty()) return result.also { cache[cacheKey] = it }
-            }
+            val introDbResult = fetchIntroDbSegments(imdbId, season, episode)
+            if (introDbResult.isNotEmpty()) return introDbResult.also { cache[cacheKey] = it }
             val seasonAnilistId = entries.getOrNull(season - 1)?.anilist?.toString()
             val fallbackAnilistId = entries.firstOrNull()?.anilist?.toString()
             for ((anilistId, seasonFilter) in listOfNotNull(
@@ -114,10 +112,8 @@ object SkipIntroRepository {
             val entries = resolveImdbEntries(imdbId)
             val season = entries.indexOfFirst { it.kitsu == kitsuId.toIntOrNull() } + 1
 
-            if (introDbConfigured) {
-                val result = fetchFromIntroDb(imdbId, season, episode)
-                if (result.isNotEmpty()) return result.also { cache[cacheKey] = it }
-            }
+            val introDbResult = fetchIntroDbSegments(imdbId, season, episode)
+            if (introDbResult.isNotEmpty()) return introDbResult.also { cache[cacheKey] = it }
             val seasonAnilistId = entries.getOrNull(season - 1)?.anilist?.toString()
             val fallbackAnilistId = entries.firstOrNull()?.anilist?.toString()
             for ((anilistId, seasonFilter) in listOfNotNull(
@@ -140,6 +136,31 @@ object SkipIntroRepository {
         return emptyList<SkipInterval>().also { cache[cacheKey] = it }
     }
 
+    /**
+     * Fetches intro/recap/outro segments according to the user's selected [IntroDbProvider]:
+     * - [IntroDbProvider.INTRODB]: IntroDb only.
+     * - [IntroDbProvider.THEINTRODB]: TheIntroDB only.
+     * - [IntroDbProvider.BOTH]: IntroDb is primary and TheIntroDB fills any segment types IntroDb
+     *   did not return.
+     * TheIntroDB needs no configuration, so it also works when IntroDb is not configured for the build.
+     */
+    private suspend fun fetchIntroDbSegments(imdbId: String, season: Int, episode: Int): List<SkipInterval> {
+        val provider = PlayerSettingsRepository.uiState.value.introDbProvider
+
+        val primary = if (provider != IntroDbProvider.THEINTRODB && introDbConfigured) {
+            fetchFromIntroDb(imdbId, season, episode)
+        } else {
+            emptyList()
+        }
+        if (provider == IntroDbProvider.INTRODB) return primary
+
+        val missingTypes = INTRO_SEGMENT_TYPES.filterNot { type -> primary.any { it.type == type } }
+        if (missingTypes.isEmpty()) return primary
+
+        val backup = fetchFromTheIntroDb(imdbId, season, episode).filter { it.type in missingTypes }
+        return primary + backup
+    }
+
     private suspend fun fetchFromIntroDb(imdbId: String, season: Int, episode: Int): List<SkipInterval> {
         return try {
             val data = SkipIntroApi.getIntroDbSegments(imdbId, season, episode)
@@ -160,6 +181,30 @@ object SkipIntroRepository {
         val end = endSec ?: endMs?.let { it / 1000.0 }
         if (start == null || end == null || end <= start) return null
         return SkipInterval(startTime = start, endTime = end, type = type, provider = "introdb")
+    }
+
+    private suspend fun fetchFromTheIntroDb(imdbId: String, season: Int, episode: Int): List<SkipInterval> {
+        return try {
+            val data = SkipIntroApi.getTheIntroDbSegments(imdbId, season, episode) ?: return emptyList()
+            buildList {
+                // intro/recap: start is optional (defaults to 0), end is required.
+                data.intro?.forEach { seg -> seg.toSkipIntervalOrNull("intro", startRequired = false)?.let { add(it) } }
+                data.recap?.forEach { seg -> seg.toSkipIntervalOrNull("recap", startRequired = false)?.let { add(it) } }
+                // credits -> outro: start is required. End is required here too because we have no
+                // media duration at this layer to substitute for an open-ended segment.
+                data.credits?.forEach { seg -> seg.toSkipIntervalOrNull("outro", startRequired = true)?.let { add(it) } }
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun TheIntroDbSegment.toSkipIntervalOrNull(type: String, startRequired: Boolean): SkipInterval? {
+        if (startRequired && startMs == null) return null
+        val start = (startMs ?: 0L) / 1000.0
+        val end = endMs?.let { it / 1000.0 } ?: return null
+        if (end <= start) return null
+        return SkipInterval(startTime = start, endTime = end, type = type, provider = "theintrodb")
     }
 
     private suspend fun fetchFromAniSkip(malId: String, episode: Int): List<SkipInterval> {

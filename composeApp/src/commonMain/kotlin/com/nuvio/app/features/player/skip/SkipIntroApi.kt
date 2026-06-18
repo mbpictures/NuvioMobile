@@ -11,6 +11,7 @@ internal object SkipIntroApi {
     private const val ANISKIP_BASE = "https://api.aniskip.com/v2/"
     private const val ARM_BASE = "https://arm.haglund.dev/api/v2/"
     private const val ANIMESKIP_BASE = "https://api.anime-skip.com/"
+    private const val THEINTRODB_BASE = "https://api.theintrodb.org/v3/"
 
     // --- IntroDb ---
 
@@ -70,19 +71,36 @@ internal object SkipIntroApi {
                 headers = headers,
                 body = "{}"
             )
-            
+
             // 400 means Auth passed but payload was empty/invalid -> Key is Valid
             if (response.status == 400) return true
-            
+
             // 200/201 would also mean valid (though unexpected with empty body)
             if (response.status == 200 || response.status == 201) return true
-            
+
             // Explicitly handle auth failures
             if (response.status == 401 || response.status == 403) return false
-            
+
             false
         } catch (_: Exception) {
             false
+        }
+    }
+
+    // --- TheIntroDB (backup for IntroDb) ---
+
+    suspend fun getTheIntroDbSegments(
+        imdbId: String,
+        season: Int,
+        episode: Int,
+    ): TheIntroDbMediaResponse? {
+        if (imdbId.isBlank()) return null
+        val url = "${THEINTRODB_BASE}media?imdb_id=$imdbId&season=$season&episode=$episode"
+        return try {
+            val text = httpGetText(url)
+            json.decodeFromString<TheIntroDbMediaResponse>(text)
+        } catch (_: Exception) {
+            null
         }
     }
 
