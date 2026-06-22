@@ -867,6 +867,26 @@ private fun PlaybackSettingsSection(
                     isTablet = isTablet,
                     onCheckedChange = PlayerSettingsRepository::setSkipIntroEnabled,
                 )
+                if (autoPlayPlayerSettings.skipIntroEnabled) {
+                    SettingsGroupDivider(isTablet = isTablet)
+                    var showIntroDbProviderDialog by remember { mutableStateOf(false) }
+                    SettingsNavigationRow(
+                        title = stringResource(Res.string.settings_playback_introdb_provider),
+                        description = stringResource(autoPlayPlayerSettings.introDbProvider.labelRes),
+                        isTablet = isTablet,
+                        onClick = { showIntroDbProviderDialog = true },
+                    )
+                    if (showIntroDbProviderDialog) {
+                        IntroDbProviderDialog(
+                            selected = autoPlayPlayerSettings.introDbProvider,
+                            onSelect = {
+                                PlayerSettingsRepository.setIntroDbProvider(it)
+                                showIntroDbProviderDialog = false
+                            },
+                            onDismiss = { showIntroDbProviderDialog = false },
+                        )
+                    }
+                }
                 SettingsGroupDivider(isTablet = isTablet)
                 SettingsSwitchRow(
                     title = stringResource(Res.string.settings_playback_anime_skip),
@@ -3198,6 +3218,100 @@ private fun NextEpisodeThresholdModeDialog(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun IntroDbProviderDialog(
+    selected: com.nuvio.app.features.player.skip.IntroDbProvider,
+    onSelect: (com.nuvio.app.features.player.skip.IntroDbProvider) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val options = com.nuvio.app.features.player.skip.IntroDbProvider.entries
+
+    BasicAlertDialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(Res.string.settings_playback_introdb_provider),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(Res.string.settings_playback_introdb_provider_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                options.forEach { provider ->
+                    val isSelected = provider == selected
+                    val containerColor = if (isSelected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                    }
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(provider) },
+                        shape = RoundedCornerShape(12.dp),
+                        color = containerColor,
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = stringResource(provider.labelRes),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Box(
+                                modifier = Modifier.size(24.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(Res.string.settings_playback_dialog_close),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+private val com.nuvio.app.features.player.skip.IntroDbProvider.labelRes: StringResource
+    get() = when (this) {
+        com.nuvio.app.features.player.skip.IntroDbProvider.BOTH ->
+            Res.string.settings_playback_introdb_provider_both
+        com.nuvio.app.features.player.skip.IntroDbProvider.INTRODB ->
+            Res.string.settings_playback_introdb_provider_introdb
+        com.nuvio.app.features.player.skip.IntroDbProvider.THEINTRODB ->
+            Res.string.settings_playback_introdb_provider_theintrodb
+    }
 
 private fun decoderPriorityRes(priority: Int): StringResource = when (priority) {
     0 -> Res.string.settings_playback_decoder_device_only

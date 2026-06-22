@@ -818,6 +818,11 @@
     <string name="settings_playback_intro_submit_enabled_description">Show a button to submit intro/outro timestamps to the community database.</string>
     <string name="settings_playback_introdb_api_key">IntroDB API Key</string>
     <string name="settings_playback_introdb_api_key_description">Enter your IntroDB API key to submit timestamps. Required for submission.</string>
+    <string name="settings_playback_introdb_provider">Timestamp Source</string>
+    <string name="settings_playback_introdb_provider_description">Choose which database provides intro, recap, and outro timestamps.</string>
+    <string name="settings_playback_introdb_provider_both">IntroDB + TheIntroDB (backup)</string>
+    <string name="settings_playback_introdb_provider_introdb">IntroDB only</string>
+    <string name="settings_playback_introdb_provider_theintrodb">TheIntroDB only</string>
     <string name="settings_playback_anime_skip_description">Also search AnimeSkip for skip timestamps (requires client ID).</string>
     <string name="settings_playback_auto_play_next_episode">Auto-play Next Episode</string>
     <string name="settings_playback_auto_play_next_episode_description">Start next episode automatically when prompt appears.</string>

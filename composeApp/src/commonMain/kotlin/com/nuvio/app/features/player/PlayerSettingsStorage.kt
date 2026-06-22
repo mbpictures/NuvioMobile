@@ -80,6 +80,8 @@ internal expect object PlayerSettingsStorage {
 
     fun loadIntroDbApiKey(): String?
     fun saveIntroDbApiKey(apiKey: String)
+    fun loadIntroDbProvider(): String?
+    fun saveIntroDbProvider(provider: String)
     fun loadIntroSubmitEnabled(): Boolean?
     fun saveIntroSubmitEnabled(enabled: Boolean)
     fun loadStreamAutoPlayNextEpisodeEnabled(): Boolean?

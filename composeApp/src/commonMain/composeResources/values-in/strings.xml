@@ -751,6 +751,11 @@
     <string name="settings_playback_intro_submit_enabled_description">Tampilkan tombol untuk mengirim cap waktu intro/outro ke database komunitas.</string>
     <string name="settings_playback_introdb_api_key">Kunci API IntroDB</string>
     <string name="settings_playback_introdb_api_key_description">Masukkan kunci API IntroDB Anda untuk mengirim cap waktu. Diperlukan untuk pengiriman.</string>
+    <string name="settings_playback_introdb_provider">Sumber Cap Waktu</string>
+    <string name="settings_playback_introdb_provider_description">Pilih basis data mana yang menyediakan cap waktu intro, rekap, dan outro.</string>
+    <string name="settings_playback_introdb_provider_both">IntroDB + TheIntroDB (cadangan)</string>
+    <string name="settings_playback_introdb_provider_introdb">Hanya IntroDB</string>
+    <string name="settings_playback_introdb_provider_theintrodb">Hanya TheIntroDB</string>
     <string name="settings_playback_anime_skip_description">Juga cari AnimeSkip untuk cap waktu lewati (memerlukan ID klien).</string>
     <string name="settings_playback_auto_play_next_episode">Putar Otomatis Episode Berikutnya</string>
     <string name="settings_playback_auto_play_next_episode_description">Mulai episode berikutnya secara otomatis ketika prompt muncul.</string>

@@ -742,6 +742,11 @@
     <string name="settings_playback_intro_submit_enabled_description">Giriş/jenerik zaman damgalarını topluluk veritabanına göndermek için bir buton göster.</string>
     <string name="settings_playback_introdb_api_key">IntroDB API Anahtarı</string>
     <string name="settings_playback_introdb_api_key_description">Zaman damgası göndermek için IntroDB API anahtarını gir. Gönderim için zorunludur.</string>
+    <string name="settings_playback_introdb_provider">Zaman Damgası Kaynağı</string>
+    <string name="settings_playback_introdb_provider_description">Intro, özet ve outro zaman damgalarını hangi veritabanının sağlayacağını seçin.</string>
+    <string name="settings_playback_introdb_provider_both">IntroDB + TheIntroDB (yedek)</string>
+    <string name="settings_playback_introdb_provider_introdb">Yalnızca IntroDB</string>
+    <string name="settings_playback_introdb_provider_theintrodb">Yalnızca TheIntroDB</string>
     <string name="settings_playback_anime_skip_description">Geçme zamanları için AnimeSkip'te de ara (client ID gerekir).</string>
     <string name="settings_playback_auto_play_next_episode">Sonraki bölümü otomatik oynat</string>
     <string name="settings_playback_auto_play_next_episode_description">Eşik değere ulaşılınca sonraki bölümü otomatik bulup oynat.</string>

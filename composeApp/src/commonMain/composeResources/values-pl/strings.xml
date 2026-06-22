@@ -752,6 +752,11 @@
     <string name="settings_playback_intro_submit_enabled_description">Pokaż przycisk do przesyłania znaczników intro/outro do bazy społeczności.</string>
     <string name="settings_playback_introdb_api_key">Klucz API IntroDB</string>
     <string name="settings_playback_introdb_api_key_description">Wprowadź klucz API IntroDB, aby przesyłać znaczniki czasowe. Wymagany do przesyłania.</string>
+    <string name="settings_playback_introdb_provider">Źródło znaczników czasu</string>
+    <string name="settings_playback_introdb_provider_description">Wybierz, która baza danych dostarcza znaczniki czasu intro, streszczenia i napisów końcowych.</string>
+    <string name="settings_playback_introdb_provider_both">IntroDB + TheIntroDB (zapasowe)</string>
+    <string name="settings_playback_introdb_provider_introdb">Tylko IntroDB</string>
+    <string name="settings_playback_introdb_provider_theintrodb">Tylko TheIntroDB</string>
     <string name="settings_playback_anime_skip_description">Wyszukuj również w AnimeSkip znaczniki pomijania (wymaga ID klienta).</string>
     <string name="settings_playback_auto_play_next_episode">Automatyczne odtwarzanie następnego odcinka</string>
     <string name="settings_playback_auto_play_next_episode_description">Automatycznie znajdź i odtwórz następny odcinek po osiągnięciu progu.</string>

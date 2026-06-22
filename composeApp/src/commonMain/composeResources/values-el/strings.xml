@@ -546,6 +546,11 @@
     <string name="settings_playback_show_loading_overlay_description">Εμφάνιση του αρχικού overlay φόρτωσης ενώ ξεκινά η αναπαραγωγή μιας ροής.</string>
     <string name="settings_playback_skip_intro_outro_recap">Παράλειψη εισαγωγής/εξόδου/ανακεφαλαίωσης</string>
     <string name="settings_playback_skip_intro_outro_recap_description">Εμφάνιση κουμπιού παράλειψης κατά τα εντοπισμένα τμήματα εισαγωγής, εξόδου και ανακεφαλαίωσης.</string>
+    <string name="settings_playback_introdb_provider">Πηγή χρονικών σημάνσεων</string>
+    <string name="settings_playback_introdb_provider_description">Επιλέξτε ποια βάση δεδομένων παρέχει τις χρονικές σημάνσεις εισαγωγής, ανακεφαλαίωσης και εξόδου.</string>
+    <string name="settings_playback_introdb_provider_both">IntroDB + TheIntroDB (εφεδρικό)</string>
+    <string name="settings_playback_introdb_provider_introdb">Μόνο IntroDB</string>
+    <string name="settings_playback_introdb_provider_theintrodb">Μόνο TheIntroDB</string>
     <string name="settings_playback_source_scope">Εύρος πηγής</string>
     <string name="settings_playback_source_scope_all_addons">Όλα τα πρόσθετα</string>
     <string name="settings_playback_source_scope_all_addons_description">Εξέταση ροών από όλα τα εγκατεστημένα πρόσθετα.</string>

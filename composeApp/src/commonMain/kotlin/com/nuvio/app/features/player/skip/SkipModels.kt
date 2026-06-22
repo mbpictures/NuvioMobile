@@ -27,6 +27,16 @@ enum class NextEpisodeThresholdMode {
     MINUTES_BEFORE_END,
 }
 
+/**
+ * Which IntroDb-family service supplies intro/recap/outro timestamps.
+ * [BOTH] uses IntroDb as primary and fills any missing segment types from TheIntroDB.
+ */
+enum class IntroDbProvider {
+    BOTH,
+    INTRODB,
+    THEINTRODB,
+}
+
 // --- IntroDb API response models ---
 
 @Serializable
@@ -60,6 +70,28 @@ data class SubmitIntroRequest(
     @SerialName("start_ms") val startMs: Long,
     @SerialName("end_ms") val endMs: Long,
     @SerialName("segment_type") val segmentType: String,
+)
+
+// --- TheIntroDB API response models (GET /v3/media) ---
+// Used as a backup source to fill in segment types IntroDb is missing.
+// Each category is an array of timestamps with millisecond bounds.
+
+@Serializable
+data class TheIntroDbMediaResponse(
+    @SerialName("tmdb_id") val tmdbId: Int? = null,
+    @SerialName("type") val type: String? = null,
+    @SerialName("season") val season: Int? = null,
+    @SerialName("episode") val episode: Int? = null,
+    @SerialName("intro") val intro: List<TheIntroDbSegment>? = null,
+    @SerialName("recap") val recap: List<TheIntroDbSegment>? = null,
+    @SerialName("credits") val credits: List<TheIntroDbSegment>? = null,
+    @SerialName("preview") val preview: List<TheIntroDbSegment>? = null,
+)
+
+@Serializable
+data class TheIntroDbSegment(
+    @SerialName("start_ms") val startMs: Long? = null,
+    @SerialName("end_ms") val endMs: Long? = null,
 )
 
 // --- AniSkip API response models ---

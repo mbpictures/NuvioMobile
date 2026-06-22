@@ -809,6 +809,11 @@
     <string name="settings_playback_intro_submit_enabled_description">Affiche un bouton pour soumettre des timestamps d’intro/outro à la base de données communautaire.</string>
     <string name="settings_playback_introdb_api_key">Clé API IntroDB</string>
     <string name="settings_playback_introdb_api_key_description">Saisis ta clé API IntroDB pour soumettre des timestamps. Requise pour la soumission.</string>
+    <string name="settings_playback_introdb_provider">Source des horodatages</string>
+    <string name="settings_playback_introdb_provider_description">Choisis quelle base de données fournit les horodatages d'intro, de résumé et de générique.</string>
+    <string name="settings_playback_introdb_provider_both">IntroDB + TheIntroDB (secours)</string>
+    <string name="settings_playback_introdb_provider_introdb">IntroDB uniquement</string>
+    <string name="settings_playback_introdb_provider_theintrodb">TheIntroDB uniquement</string>
     <string name="settings_playback_anime_skip_description">Rechercher également des marqueurs de saut sur AnimeSkip (nécessite un ID client).</string>
     <string name="settings_playback_auto_play_next_episode">Lecture automatique de l’épisode suivant</string>
     <string name="settings_playback_auto_play_next_episode_description">Rechercher et lire automatiquement l’épisode suivant lorsque le seuil est atteint.</string>

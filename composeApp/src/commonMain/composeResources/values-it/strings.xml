@@ -1312,6 +1312,11 @@
   <string name="settings_playback_intro_submit_enabled_description">Mostra un pulsante per inviare i timestamp di intro/sigle finali al database della community.</string>
   <string name="settings_playback_introdb_api_key">Chiave API IntroDB</string>
   <string name="settings_playback_introdb_api_key_description">Inserisci la tua chiave API IntroDB per inviare i timestamp. Richiesta per l'invio.</string>
+  <string name="settings_playback_introdb_provider">Origine timestamp</string>
+  <string name="settings_playback_introdb_provider_description">Scegli quale database fornisce i timestamp di intro, riepilogo e finale.</string>
+  <string name="settings_playback_introdb_provider_both">IntroDB + TheIntroDB (riserva)</string>
+  <string name="settings_playback_introdb_provider_introdb">Solo IntroDB</string>
+  <string name="settings_playback_introdb_provider_theintrodb">Solo TheIntroDB</string>
   <string name="settings_playback_external_player">Lettore esterno</string>
   <string name="settings_playback_external_player_app">App lettore esterno</string>
   <string name="settings_playback_external_player_description_android">Apri la nuova riproduzione con l'app video predefinita di Android o con il selettore di sistema.</string>
