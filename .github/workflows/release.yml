@@ -381,10 +381,23 @@ jobs:
           retention-days: 7
 
   macos:
-    name: macOS desktop release
-    runs-on: macos-15
+    name: macOS desktop release (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     needs: prepare
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # jpackage produces a single-architecture .app matching the build
+          # machine's CPU (it cannot make a universal binary), so we build one
+          # DMG per arch on a matching runner: Intel on macos-13, Apple Silicon
+          # on macos-15. An arm64-only DMG fails on Intel Macs with "is not
+          # supported on this Mac"; this matrix ships a native build for each.
+          - runner: macos-13   # Intel (x86_64)
+            arch: x64
+          - runner: macos-15   # Apple Silicon (arm64)
+            arch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -428,6 +441,7 @@ jobs:
       - name: Stage and rename macOS artifact
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
+          ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
           mkdir -p artifacts
@@ -437,7 +451,7 @@ jobs:
             ls -la "composeApp/build/compose/binaries/main-release/dmg/" || true
             exit 1
           fi
-          dest="artifacts/Nuvio-${VERSION}-macos.dmg"
+          dest="artifacts/Nuvio-${VERSION}-macos-${ARCH}.dmg"
           cp "$src" "$dest"
           echo "  $src -> $dest"
           ls -la artifacts/
@@ -445,7 +459,7 @@ jobs:
       - name: Upload macOS installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-installer
+          name: macos-installer-${{ matrix.arch }}
           path: artifacts/*.dmg
           if-no-files-found: error
           retention-days: 7
@@ -768,10 +782,11 @@ jobs:
           name: windows-installers
           path: release-assets/
 
-      - name: Download macOS installer
+      - name: Download macOS installers
         uses: actions/download-artifact@v4
         with:
-          name: macos-installer
+          pattern: macos-installer-*
+          merge-multiple: true
           path: release-assets/
 
       - name: Download Linux installer
@@ -844,8 +859,10 @@ jobs:
             printf '| Windows | %s &nbsp;/&nbsp; %s |\n' \
               "$(link "Nuvio-${VERSION}-windows.msi" "MSI")" \
               "$(link "Nuvio-${VERSION}-windows.exe" "EXE")"
-            printf '| macOS | %s |\n' \
-              "$(link "Nuvio-${VERSION}-macos.dmg" "DMG")"
+            printf '| macOS (Apple Silicon) | %s |\n' \
+              "$(link "Nuvio-${VERSION}-macos-arm64.dmg" "DMG")"
+            printf '| macOS (Intel) | %s |\n' \
+              "$(link "Nuvio-${VERSION}-macos-x64.dmg" "DMG")"
             printf '| Linux | %s |\n' \
               "$(link "Nuvio-${VERSION}-linux.deb" "DEB")"
             echo
@@ -864,7 +881,8 @@ jobs:
             echo
             echo "- **Android (Full)** is the sideload-distribution flavor with the full feature set. **Android (Play Store)** matches the Play Store-distribution flavor."
             echo "- The iOS .ipa is **unsigned** — install with AltStore, Sideloadly, or another sideloading tool."
-            echo "- The Windows MSI and EXE and the macOS DMG are unsigned. Windows SmartScreen / macOS Gatekeeper may warn on first launch — bypass per OS instructions."
+            echo "- **macOS:** pick **Apple Silicon** for M-series Macs or **Intel** for older Macs — installing the wrong one fails with \"is not supported on this Mac\". The Intel build also runs on Apple Silicon via Rosetta."
+            echo "- The Windows MSI/EXE and the macOS DMGs are unsigned. Windows SmartScreen / macOS Gatekeeper may warn on first launch. On macOS, if you see \"app is damaged\", clear the quarantine flag: \`xattr -dr com.apple.quarantine /Applications/Nuvio.app\`."
             echo "- The Linux .deb targets Debian/Ubuntu (x86_64): install with \`sudo apt install ./Nuvio-${VERSION}-linux.deb\`. It bundles libmpv and needs a libstdc++ from Ubuntu 22.04+ (older hosts fall back to a system-installed libmpv)."
           } > release-notes.md
           echo "--- release notes ---"
