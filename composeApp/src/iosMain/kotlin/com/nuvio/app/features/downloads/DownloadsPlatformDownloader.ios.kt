@@ -47,6 +47,7 @@ import platform.Foundation.NSURLSessionConfiguration
 import platform.Foundation.NSURLSessionDataDelegateProtocol
 import platform.Foundation.NSURLSessionDataTask
 import platform.Foundation.NSURLSessionTask
+import platform.Foundation.dataTaskWithRequest
 import platform.Foundation.setHTTPMethod
 import platform.Foundation.setValue
 import platform.Foundation.timeIntervalSince1970
@@ -612,7 +613,7 @@ private suspend fun iosHttpGet(
     }
     val session = NSURLSession.sessionWithConfiguration(configuration)
     val completion = CompletableDeferred<HlsHttpResult>()
-    val task = session.dataTaskWithRequest(nativeRequest) { data, response, error ->
+    val task = session.dataTaskWithRequest(nativeRequest) { data: NSData?, response: NSURLResponse?, error: NSError? ->
         if (error != null) {
             completion.completeExceptionally(IllegalStateException(error.localizedDescription))
         } else {
