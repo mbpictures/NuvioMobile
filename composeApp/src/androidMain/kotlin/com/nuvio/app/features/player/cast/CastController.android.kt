@@ -320,11 +320,10 @@ internal class CombinedAndroidCastController(
     }
 
     override fun loadMedia(request: CastMediaRequest) {
-        val routed = routeThroughProxy(request)
+        val routed = routeThroughProxy(request, forceProxy = dlnaActive)
         if (dlnaActive) dlna.loadMedia(withProxiedSubtitles(routed)) else cast?.loadMedia(routed)
     }
 
-    private fun routeThroughProxy(request: CastMediaRequest): CastMediaRequest {
     private fun withProxiedSubtitles(request: CastMediaRequest): CastMediaRequest {
         if (request.subtitles.isEmpty()) return request
         val proxied = request.subtitles.mapNotNull { sub ->
@@ -333,6 +332,7 @@ internal class CombinedAndroidCastController(
         return request.copy(subtitles = proxied)
     }
 
+    private fun routeThroughProxy(request: CastMediaRequest, forceProxy: Boolean): CastMediaRequest {
         val headers = request.headers
             .mapNotNull { (rawKey, rawValue) ->
                 val key = rawKey.trim()
@@ -340,9 +340,12 @@ internal class CombinedAndroidCastController(
                 if (key.isBlank() || value.isBlank() || key.equals("Range", ignoreCase = true)) null else key to value
             }
             .toMap()
-        if (headers.isEmpty()) return request
+        if (headers.isEmpty() && !forceProxy) return request
         val proxiedUrl = proxyServer.prepare(request.url, headers) ?: return request
-        Log.i(TAG, "casting via local proxy to forward headers: ${headers.keys.joinToString()}")
+        Log.i(
+            TAG,
+            "casting via local proxy (forced=$forceProxy, headers: ${headers.keys.joinToString().ifEmpty { "none" }})",
+        )
         return request.copy(
             url = proxiedUrl,
             contentType = request.contentType ?: guessCastContentType(request.url),
