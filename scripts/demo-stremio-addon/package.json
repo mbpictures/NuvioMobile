@@ -1,0 +1,13 @@
+{
+  "name": "nuvio-demo-stremio-addon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local Stremio addon serving Big Buck Bunny as an auth-gated HLS stream for testing.",
+  "main": "addon.js",
+  "scripts": {
+    "start": "node addon.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
