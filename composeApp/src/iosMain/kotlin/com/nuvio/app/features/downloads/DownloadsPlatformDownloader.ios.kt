@@ -1,14 +1,26 @@
 package com.nuvio.app.features.downloads
 
+import com.nuvio.app.features.plugins.cryptointerop.CCCrypt
+import com.nuvio.app.features.plugins.cryptointerop.kCCAlgorithmAES
+import com.nuvio.app.features.plugins.cryptointerop.kCCDecrypt
+import com.nuvio.app.features.plugins.cryptointerop.kCCOptionPKCS7Padding
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.CPointer
+import kotlinx.cinterop.ULongVar
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.alloc
 import kotlinx.cinterop.convert
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.ptr
+import kotlinx.cinterop.usePinned
+import kotlinx.cinterop.value
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import nuvio.composeapp.generated.resources.Res
@@ -35,6 +47,7 @@ import platform.Foundation.NSURLSessionConfiguration
 import platform.Foundation.NSURLSessionDataDelegateProtocol
 import platform.Foundation.NSURLSessionDataTask
 import platform.Foundation.NSURLSessionTask
+import platform.Foundation.dataTaskWithRequest
 import platform.Foundation.setHTTPMethod
 import platform.Foundation.setValue
 import platform.Foundation.timeIntervalSince1970
@@ -44,6 +57,8 @@ import platform.posix.fclose
 import platform.posix.fflush
 import platform.posix.fopen
 import platform.posix.fwrite
+import platform.posix.memcpy
+import kotlin.coroutines.coroutineContext
 
 private const val DOWNLOAD_REQUEST_TIMEOUT_SECONDS = 60.0
 private const val DOWNLOAD_RESOURCE_TIMEOUT_SECONDS = 24.0 * 60.0 * 60.0
@@ -77,6 +92,19 @@ internal actual object DownloadsPlatformDownloader {
 
         scope.launch {
             val downloadsDirectory = downloadsDirectoryPath()
+
+            if (request.isHlsStream || request.sourceUrl.isHlsPlaylistUrl()) {
+                performHlsDownloadIos(
+                    request = request,
+                    downloadsDirectory = downloadsDirectory,
+                    handle = handle,
+                    onProgress = onProgress,
+                    onSuccess = onSuccess,
+                    onFailure = onFailure,
+                )
+                return@launch
+            }
+
             val destinationPath = "$downloadsDirectory/${request.destinationFileName}"
             val tempPath = "$downloadsDirectory/${request.destinationFileName}.part"
 
@@ -493,4 +521,176 @@ private fun parseContentRangeTotal(headerValue: String?): Long? {
     val totalPart = value.substring(slashIndex + 1).trim()
     if (totalPart == "*") return null
     return totalPart.toLongOrNull()?.takeIf { it > 0L }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private suspend fun performHlsDownloadIos(
+    request: DownloadPlatformRequest,
+    downloadsDirectory: String,
+    handle: IosDownloadsTaskHandle,
+    onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+    onSuccess: (localFileUri: String, totalBytes: Long?) -> Unit,
+    onFailure: (message: String) -> Unit,
+) {
+    val callerContext = coroutineContext
+    val tempPath = "$downloadsDirectory/${request.destinationFileName}.part"
+    removePathIfExists(tempPath)
+
+    val outputFile: CPointer<FILE> = fopen(tempPath, "wb") ?: run {
+        onFailure(runBlocking { getString(Res.string.downloads_error_open_partial_file_failed) })
+        return
+    }
+
+    var fileClosed = false
+    try {
+        val outcome = downloadHlsToFile(
+            sourceUrl = request.sourceUrl,
+            httpGet = { url, range -> iosHttpGet(url, request.sourceHeaders, range, handle) },
+            appendBytes = { bytes -> writeAllToFile(outputFile, bytes) },
+            decryptAes128Cbc = ::aes128CbcDecryptIos,
+            onProgress = onProgress,
+            ensureActive = { callerContext.ensureActive() },
+        )
+
+        fflush(outputFile)
+        fclose(outputFile)
+        fileClosed = true
+
+        val finalName = hlsOutputFileName(request.destinationFileName, outcome.isFmp4)
+        val destinationPath = "$downloadsDirectory/$finalName"
+        removePathIfExists(destinationPath)
+        val moved = NSFileManager.defaultManager.moveItemAtPath(
+            srcPath = tempPath,
+            toPath = destinationPath,
+            error = null,
+        )
+        if (!moved) {
+            error(runBlocking { getString(Res.string.downloads_error_finalize_file_failed) })
+        }
+
+        val localFileUri = NSURL.fileURLWithPath(destinationPath).absoluteString ?: "file://$destinationPath"
+        onSuccess(localFileUri, outcome.totalBytes)
+    } catch (_: CancellationException) {
+        handle.cancelNativeTask()
+    } catch (error: Throwable) {
+        onFailure(error.message ?: runBlocking { getString(Res.string.download_failed) })
+    } finally {
+        if (!fileClosed) {
+            fflush(outputFile)
+            fclose(outputFile)
+        }
+        removePathIfExists(tempPath)
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private suspend fun iosHttpGet(
+    url: String,
+    headers: Map<String, String>,
+    range: HlsByteRange?,
+    handle: IosDownloadsTaskHandle,
+): HlsHttpResult {
+    val nativeRequest = NSMutableURLRequest(
+        uRL = NSURL(string = url),
+        cachePolicy = NSURLRequestReloadIgnoringLocalCacheData,
+        timeoutInterval = DOWNLOAD_REQUEST_TIMEOUT_SECONDS,
+    )
+    nativeRequest.setHTTPMethod("GET")
+    headers.forEach { (key, value) ->
+        nativeRequest.setValue(value, forHTTPHeaderField = key)
+    }
+    if (range != null) {
+        nativeRequest.setValue(
+            "bytes=${range.offset}-${range.offset + range.length - 1}",
+            forHTTPHeaderField = "Range",
+        )
+    }
+
+    val configuration = NSURLSessionConfiguration.defaultSessionConfiguration().apply {
+        timeoutIntervalForRequest = DOWNLOAD_REQUEST_TIMEOUT_SECONDS
+        timeoutIntervalForResource = DOWNLOAD_RESOURCE_TIMEOUT_SECONDS
+        waitsForConnectivity = true
+    }
+    val session = NSURLSession.sessionWithConfiguration(configuration)
+    val completion = CompletableDeferred<HlsHttpResult>()
+    val task = session.dataTaskWithRequest(nativeRequest) { data: NSData?, response: NSURLResponse?, error: NSError? ->
+        if (error != null) {
+            completion.completeExceptionally(IllegalStateException(error.localizedDescription))
+        } else {
+            val httpResponse = response as? NSHTTPURLResponse
+            completion.complete(
+                HlsHttpResult(
+                    status = httpResponse?.statusCode?.toInt() ?: 0,
+                    body = data?.toByteArray() ?: ByteArray(0),
+                    finalUrl = httpResponse?.URL?.absoluteString ?: url,
+                ),
+            )
+        }
+    }
+
+    handle.attach(task, session)
+    task.resume()
+    return try {
+        completion.await()
+    } finally {
+        session.finishTasksAndInvalidate()
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private fun writeAllToFile(file: CPointer<FILE>, bytes: ByteArray) {
+    if (bytes.isEmpty()) return
+    bytes.usePinned { pinned ->
+        fwrite(pinned.addressOf(0), 1.convert(), bytes.size.convert(), file)
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private fun NSData.toByteArray(): ByteArray {
+    val size = length.toInt()
+    if (size == 0) return ByteArray(0)
+    val result = ByteArray(size)
+    result.usePinned { pinned ->
+        memcpy(pinned.addressOf(0), bytes, length)
+    }
+    return result
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private fun aes128CbcDecryptIos(data: ByteArray, key: ByteArray, iv: ByteArray): ByteArray {
+    if (data.isEmpty()) return ByteArray(0)
+    // CCCrypt needs room for up to one extra AES block (16 bytes) versus the input.
+    val outputCapacity = data.size + 16
+    val output = ByteArray(outputCapacity)
+
+    val produced = memScoped {
+        val moved = alloc<ULongVar>()
+        val status = data.usePinned { dataPinned ->
+            key.usePinned { keyPinned ->
+                iv.usePinned { ivPinned ->
+                    output.usePinned { outputPinned ->
+                        CCCrypt(
+                            kCCDecrypt.convert(),
+                            kCCAlgorithmAES.convert(),
+                            kCCOptionPKCS7Padding.convert(),
+                            keyPinned.addressOf(0),
+                            key.size.convert(),
+                            ivPinned.addressOf(0),
+                            dataPinned.addressOf(0),
+                            data.size.convert(),
+                            outputPinned.addressOf(0),
+                            outputCapacity.convert(),
+                            moved.ptr,
+                        )
+                    }
+                }
+            }
+        }
+        if (status != 0) {
+            throw HlsDownloadException("AES-128 decryption failed (status=$status)")
+        }
+        moved.value.toInt()
+    }
+
+    return if (produced == outputCapacity) output else output.copyOf(produced)
 }

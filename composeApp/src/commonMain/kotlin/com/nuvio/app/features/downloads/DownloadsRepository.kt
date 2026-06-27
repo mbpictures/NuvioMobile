@@ -126,6 +126,8 @@ object DownloadsRepository {
             return DownloadEnqueueResult.UnsupportedFormat
         }
 
+        val isHlsStream = stream.streamType.isHlsStreamTypeHint() || sourceUrl.isHlsPlaylistUrl()
+
         val now = DownloadsClock.nowEpochMs()
         val logicalKey = buildLogicalKey(
             parentMetaId = parentMetaId,
@@ -152,6 +154,7 @@ object DownloadsRepository {
             episodeTitle = episodeTitle,
             fallbackTitle = stream.streamLabel,
             sourceUrl = sourceUrl,
+            isHlsStream = isHlsStream,
             nowEpochMs = now,
         )
 
@@ -174,6 +177,7 @@ object DownloadsRepository {
             providerName = stream.addonName,
             providerAddonId = stream.addonId,
             sourceUrl = sourceUrl,
+            isHlsStream = isHlsStream,
             sourceHeaders = sanitizeRequestHeaders(stream.behaviorHints.proxyHeaders?.request),
             sourceResponseHeaders = sanitizeResponseHeaders(stream.behaviorHints.proxyHeaders?.response),
             localFileUri = null,
@@ -296,6 +300,7 @@ object DownloadsRepository {
             sourceUrl = item.sourceUrl,
             sourceHeaders = item.sourceHeaders,
             destinationFileName = item.fileName,
+            isHlsStream = item.isHlsStream || item.sourceUrl.isHlsPlaylistUrl(),
         )
 
         val handle = DownloadsPlatformDownloader.start(
@@ -320,6 +325,7 @@ object DownloadsRepository {
                     current.copy(
                         status = DownloadStatus.Completed,
                         localFileUri = localFileUri,
+                        fileName = alignFileNameExtension(current.fileName, localFileUri),
                         downloadedBytes = if (totalBytes != null && totalBytes > 0L) {
                             totalBytes
                         } else {
@@ -497,6 +503,7 @@ private fun buildFileName(
     episodeTitle: String?,
     fallbackTitle: String,
     sourceUrl: String,
+    isHlsStream: Boolean,
     nowEpochMs: Long,
 ): String {
     val baseTitle = if (seasonNumber != null && episodeNumber != null) {
@@ -515,7 +522,9 @@ private fun buildFileName(
         title.ifBlank { fallbackTitle }
     }
 
-    val extension = sourceUrl.fileExtensionFromUrl()
+    // HLS has no single source file; the merged output is MPEG-TS by default and the platform
+    // downloader upgrades the extension to .mp4 when the segments turn out to be fragmented MP4.
+    val extension = if (isHlsStream) "ts" else sourceUrl.fileExtensionFromUrl()
     return buildString {
         append(baseTitle.sanitizeFileName().ifBlank { "download" }.take(92))
         append('_')
@@ -544,8 +553,33 @@ private fun String.fileExtensionFromUrl(): String {
 private fun String.isSupportedDownloadUrl(): Boolean {
     val normalized = trim().lowercase()
     if (normalized.startsWith("magnet:")) return false
-    if (normalized.endsWith(".m3u8") || normalized.contains(".m3u8?")) return false
+    // HLS (.m3u8) is supported via the segment-merging downloader; DASH/torrents are not.
     if (normalized.endsWith(".mpd") || normalized.contains(".mpd?")) return false
     if (normalized.endsWith(".torrent") || normalized.contains(".torrent?")) return false
     return normalized.startsWith("http://") || normalized.startsWith("https://")
+}
+
+private fun String?.isHlsStreamTypeHint(): Boolean {
+    val normalized = this?.trim()?.lowercase().orEmpty()
+    return normalized == "hls" || normalized == "m3u8"
+}
+
+/**
+ * Keeps the stored file name's extension in sync with the file the downloader actually produced.
+ * HLS downloads start out named `.ts` but may finish as `.mp4` (fragmented MP4); the player relies
+ * on the extension to pick the right demuxer, so the persisted name must match the real file.
+ */
+private fun alignFileNameExtension(currentFileName: String, localFileUri: String): String {
+    val resolvedExtension = localFileUri
+        .substringBefore('?')
+        .substringBefore('#')
+        .substringAfterLast('/')
+        .substringAfterLast('.', missingDelimiterValue = "")
+        .lowercase()
+        .takeIf { it.length in 2..5 && it.all(Char::isLetterOrDigit) }
+        ?: return currentFileName
+
+    if (currentFileName.endsWith(".$resolvedExtension", ignoreCase = true)) return currentFileName
+    val stem = currentFileName.substringBeforeLast('.', missingDelimiterValue = currentFileName)
+    return "$stem.$resolvedExtension"
 }

@@ -6,6 +6,8 @@ internal data class DownloadPlatformRequest(
     val sourceUrl: String,
     val sourceHeaders: Map<String, String>,
     val destinationFileName: String,
+    /** When true the source is an HLS playlist that must be fetched segment-by-segment. */
+    val isHlsStream: Boolean = false,
 )
 
 internal interface DownloadsTaskHandle {

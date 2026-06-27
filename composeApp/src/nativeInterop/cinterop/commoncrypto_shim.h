@@ -31,3 +31,46 @@ void CCHmac(
   size_t dataLength,
   void *macOut
 );
+
+/* CommonCryptor: just enough of CommonCrypto/CommonCryptor.h for AES-128-CBC decryption. */
+typedef int32_t CCCryptorStatus;
+typedef uint32_t CCOperation;
+typedef uint32_t CCAlgorithm;
+typedef uint32_t CCOptions;
+
+enum {
+  kCCSuccess = 0,
+};
+
+enum {
+  kCCEncrypt = 0,
+  kCCDecrypt = 1,
+};
+
+enum {
+  kCCAlgorithmAES = 0,
+};
+
+enum {
+  kCCOptionPKCS7Padding = 0x0001,
+  kCCOptionECBMode = 0x0002,
+};
+
+enum {
+  kCCBlockSizeAES128 = 16,
+  kCCKeySizeAES128 = 16,
+};
+
+CCCryptorStatus CCCrypt(
+  CCOperation op,
+  CCAlgorithm alg,
+  CCOptions options,
+  const void *key,
+  size_t keyLength,
+  const void *iv,
+  const void *dataIn,
+  size_t dataInLength,
+  void *dataOut,
+  size_t dataOutAvailable,
+  size_t *dataOutMoved
+);
