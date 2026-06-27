@@ -30,6 +30,16 @@ private const val MEDIA_RENDERER = "urn:schemas-upnp-org:device:MediaRenderer:1"
 private const val AV_TRANSPORT = "urn:schemas-upnp-org:service:AVTransport:1"
 const val DLNA_ID_PREFIX = "dlna::"
 
+internal const val DLNA_CONTENT_FEATURES =
+    "DLNA.ORG_OP=01;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000"
+
+private const val START_MAX_ATTEMPTS = 10
+private const val START_RETRY_DELAY_MS = 1500L
+private const val START_RESEND_URI_ATTEMPT = 5
+
+private const val SEEK_WAIT_FOR_PLAYING_ATTEMPTS = 12
+private const val SEEK_POLL_DELAY_MS = 1000L
+
 private data class DlnaRenderer(
     val udn: String,
     val name: String,
@@ -124,28 +134,74 @@ internal class DlnaController(context: Context) : CastController {
     override fun loadMedia(request: CastMediaRequest) {
         val renderer = connected ?: return
         scope.launch {
+            Log.i(TAG, "DLNA loadMedia on '${renderer.name}': url=${request.url} type=${request.contentType ?: "(guess)"}")
             val didl = buildDidl(request)
             val uri = xmlEscape(request.url)
-            runCatching {
-                soap(
-                    renderer.controlUrl,
-                    "SetAVTransportURI",
-                    "<InstanceID>0</InstanceID>" +
-                        "<CurrentURI>$uri</CurrentURI>" +
-                        "<CurrentURIMetaData>${xmlEscape(didl)}</CurrentURIMetaData>",
-                )
-                soap(renderer.controlUrl, "Play", "<InstanceID>0</InstanceID><Speed>1</Speed>")
-                if (request.startPositionMs > 0L) {
-                    soap(
-                        renderer.controlUrl,
-                        "Seek",
-                        "<InstanceID>0</InstanceID><Unit>REL_TIME</Unit>" +
-                            "<Target>${formatTime(request.startPositionMs)}</Target>",
-                    )
+            val setUriBody = "<InstanceID>0</InstanceID>" +
+                "<CurrentURI>$uri</CurrentURI>" +
+                "<CurrentURIMetaData>${xmlEscape(didl)}</CurrentURIMetaData>"
+            val playBody = "<InstanceID>0</InstanceID><Speed>1</Speed>"
+
+            // Drive the renderer to actual playback rather than firing one Play and hoping. A renderer
+            // that shows an allow-prompt (Samsung TVs) discards commands until the viewer accepts, so
+            // we re-issue Play — and occasionally SetAVTransportURI, in case the prompt cleared the
+            // queued URI — until GetTransportInfo confirms playback. We re-send the URI only on the
+            // first attempt and once more later, to avoid re-triggering the prompt on every loop.
+            var started = false
+            var lastStartOk = false
+            var attempt = 0
+            while (isActive && !started && attempt < START_MAX_ATTEMPTS) {
+                attempt++
+                val resendUri = attempt == 1 || attempt == START_RESEND_URI_ATTEMPT
+                lastStartOk = runCatching {
+                    if (resendUri) soap(renderer.controlUrl, "SetAVTransportURI", setUriBody)
+                    soap(renderer.controlUrl, "Play", playBody)
+                }.onFailure { Log.w(TAG, "DLNA start attempt $attempt failed: ${it.message}") }.isSuccess
+                delay(START_RETRY_DELAY_MS)
+                val state = runCatching { soap(renderer.controlUrl, "GetTransportInfo", "<InstanceID>0</InstanceID>") }
+                    .getOrNull().let { extractTag(it, "CurrentTransportState").orEmpty() }
+                Log.i(TAG, "DLNA attempt $attempt: transport state='${state.ifEmpty { "(none)" }}' startOk=$lastStartOk")
+                started = state == "PLAYING" || state == "TRANSITIONING"
+            }
+
+            // Give up only when the renderer never reported playback AND the last command outright
+            // failed; if SetAVTransportURI/Play succeeded we proceed even for renderers that don't
+            // report transport state, so we don't regress the previous always-optimistic behaviour.
+            if (!started && !lastStartOk) {
+                Log.w(TAG, "DLNA renderer never started playback (attempts=$attempt)")
+                return@launch
+            }
+            Log.i(TAG, "DLNA playback started after $attempt attempt(s) (confirmed=$started)")
+
+            withContext(Dispatchers.Main) { isCasting = true }
+            startPolling(renderer)
+
+            if (request.startPositionMs > 0L) {
+                val seekTarget = formatTime(request.startPositionMs)
+                var waited = 0
+                var playing = false
+                while (isActive && waited < SEEK_WAIT_FOR_PLAYING_ATTEMPTS) {
+                    val state = runCatching { soap(renderer.controlUrl, "GetTransportInfo", "<InstanceID>0</InstanceID>") }
+                        .getOrNull().let { extractTag(it, "CurrentTransportState").orEmpty() }
+                    if (state == "PLAYING") { playing = true; break }
+                    waited++
+                    delay(SEEK_POLL_DELAY_MS)
                 }
-                withContext(Dispatchers.Main) { isCasting = true }
-                startPolling(renderer)
-            }.onFailure { Log.w(TAG, "loadMedia failed: ${it.message}") }
+                if (playing) {
+                    val resp = runCatching {
+                        soap(
+                            renderer.controlUrl,
+                            "Seek",
+                            "<InstanceID>0</InstanceID><Unit>REL_TIME</Unit><Target>$seekTarget</Target>",
+                        )
+                    }.onFailure { Log.w(TAG, "DLNA seek failed: ${it.message}") }.getOrNull()
+                    val err = extractTag(resp, "errorCode")
+                    if (err == null) Log.i(TAG, "DLNA seek to $seekTarget ok")
+                    else Log.w(TAG, "DLNA seek to $seekTarget rejected (UPnP $err); leaving playback at start")
+                } else {
+                    Log.w(TAG, "DLNA renderer never reached PLAYING; skipping resume seek (plays from start)")
+                }
+            }
         }
     }
 
@@ -294,8 +350,19 @@ internal class DlnaController(context: Context) : CastController {
         }
         return try {
             conn.outputStream.use { it.write(body.toByteArray()) }
-            val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
-            stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            // A SOAP fault comes back as a non-2xx body containing a UPnPError — log it instead of
+            // silently treating the call as a success (this is how a renderer says "I rejected that").
+            if (code !in 200..299) {
+                Log.w(
+                    TAG,
+                    "SOAP $action -> HTTP $code; UPnPError code=${extractTag(response, "errorCode")} " +
+                        "desc=${extractTag(response, "errorDescription")}",
+                )
+            }
+            response
         } finally {
             conn.disconnect()
         }
