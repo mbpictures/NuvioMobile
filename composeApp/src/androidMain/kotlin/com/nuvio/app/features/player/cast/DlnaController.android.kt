@@ -318,13 +318,26 @@ internal class DlnaController(context: Context) : CastController {
             val contentType = request.contentType ?: guessCastContentType(request.url)
             val title = xmlEscape(request.title)
             val url = xmlEscape(request.url)
+            // External subtitle: advertise it as a sidecar SRT both the generic way (a text/srt <res>)
+            // and the Samsung way (sec:CaptionInfo[Ex]). Only external subs can be conveyed — embedded
+            // audio/subtitle tracks aren't selectable over UPnP/DLNA, the renderer picks those itself.
+            val subUrl = request.subtitles.firstOrNull()?.url?.let(::xmlEscape)
+            val subtitleElements = if (subUrl != null) {
+                "<res protocolInfo=\"http-get:*:text/srt:*\">$subUrl</res>" +
+                    "<sec:CaptionInfoEx sec:type=\"srt\">$subUrl</sec:CaptionInfoEx>" +
+                    "<sec:CaptionInfo sec:type=\"srt\">$subUrl</sec:CaptionInfo>"
+            } else {
+                ""
+            }
             return "<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" " +
                 "xmlns:dc=\"http://purl.org/dc/elements/1.1/\" " +
-                "xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\">" +
+                "xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" " +
+                "xmlns:sec=\"http://www.sec.co.kr/\">" +
                 "<item id=\"0\" parentID=\"-1\" restricted=\"1\">" +
                 "<dc:title>$title</dc:title>" +
                 "<upnp:class>object.item.videoItem</upnp:class>" +
-                "<res protocolInfo=\"http-get:*:$contentType:*\">$url</res>" +
+                "<res protocolInfo=\"http-get:*:$contentType:$DLNA_CONTENT_FEATURES\">$url</res>" +
+                subtitleElements +
                 "</item></DIDL-Lite>"
         }
 

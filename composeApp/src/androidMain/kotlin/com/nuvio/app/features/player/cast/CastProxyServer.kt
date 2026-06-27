@@ -46,6 +46,17 @@ internal class CastProxyServer {
     }
 
     @Synchronized
+    fun subtitleUrl(originalUrl: String): String? {
+        if (!ensureStarted()) return null
+        val ip = lanIpv4() ?: return null
+        val encoded = Base64.encodeToString(
+            originalUrl.toByteArray(),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+        )
+        return "http://$ip:$port/sub.srt?u=$encoded"
+    }
+
+    @Synchronized
     fun stop() {
         sessions.clear()
         runCatching { serverSocket?.close() }
@@ -110,6 +121,15 @@ internal class CastProxyServer {
         val headers = sessions[sessionId]
         val targetB64 = query.split('&').firstOrNull { it.startsWith("u=") }?.substringAfter("u=")
         val target = targetB64?.let { runCatching { String(Base64.decode(it, Base64.URL_SAFE)) }.getOrNull() }
+
+        // Subtitle route: no session/headers, just fetch the sidecar file and serve it as SRT.
+        if (route.startsWith("/sub")) {
+            Log.i(TAG, "proxy subtitle request: $method $route target=${target != null}")
+            if (target.isNullOrEmpty()) writeHead(output, 404, mapOf("Content-Length" to "0"))
+            else serveSubtitle(target, output)
+            output.flush()
+            return
+        }
         if (headers == null || target.isNullOrEmpty()) {
             writeHead(output, 404, mapOf("Content-Length" to "0"))
             output.flush()

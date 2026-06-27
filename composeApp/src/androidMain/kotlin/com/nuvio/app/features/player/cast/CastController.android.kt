@@ -321,10 +321,18 @@ internal class CombinedAndroidCastController(
 
     override fun loadMedia(request: CastMediaRequest) {
         val routed = routeThroughProxy(request)
-        if (dlnaActive) dlna.loadMedia(routed) else cast?.loadMedia(routed)
+        if (dlnaActive) dlna.loadMedia(withProxiedSubtitles(routed)) else cast?.loadMedia(routed)
     }
 
     private fun routeThroughProxy(request: CastMediaRequest): CastMediaRequest {
+    private fun withProxiedSubtitles(request: CastMediaRequest): CastMediaRequest {
+        if (request.subtitles.isEmpty()) return request
+        val proxied = request.subtitles.mapNotNull { sub ->
+            proxyServer.subtitleUrl(sub.url)?.let { sub.copy(url = it) }
+        }
+        return request.copy(subtitles = proxied)
+    }
+
         val headers = request.headers
             .mapNotNull { (rawKey, rawValue) ->
                 val key = rawKey.trim()

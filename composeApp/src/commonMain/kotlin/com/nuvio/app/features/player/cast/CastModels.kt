@@ -40,6 +40,20 @@ data class CastMediaRequest(
     val contentType: String? = null,
     val headers: Map<String, String> = emptyMap(),
     val startPositionMs: Long = 0L,
+    /**
+     * External (sidecar) subtitle tracks to offer the receiver, e.g. an addon/OpenSubtitles file the
+     * user selected. Only external subtitles can be conveyed by casting — *embedded* audio and
+     * subtitle tracks inside the container can't be selected over DLNA/UPnP (the renderer chooses
+     * those itself), so honoring the in-app embedded-track selection on a receiver isn't possible.
+     */
+    val subtitles: List<CastSubtitle> = emptyList(),
+)
+
+/** An external subtitle the receiver can fetch and display alongside the video. */
+data class CastSubtitle(
+    val url: String,
+    val language: String? = null,
+    val label: String? = null,
 )
 
 /** Snapshot of remote playback on the connected receiver, mirrored back to the local UI. */

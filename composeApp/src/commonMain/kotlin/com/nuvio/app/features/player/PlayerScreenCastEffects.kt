@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import com.nuvio.app.features.player.cast.CastConnectionState
 import com.nuvio.app.features.player.cast.CastMediaRequest
+import com.nuvio.app.features.player.cast.CastSubtitle
 
 @Composable
 internal fun PlayerScreenRuntime.BindCastEffects() {
@@ -16,6 +17,12 @@ internal fun PlayerScreenRuntime.BindCastEffects() {
         snapshotFlow { cast.connectionState to cast.isCasting }
             .collect { (state, casting) ->
                 if (state == CastConnectionState.Connected && !casting) {
+                    // Only an external (addon) subtitle can be handed to a receiver; embedded tracks
+                    // are the renderer's to choose. Captured at cast start — changing it mid-cast
+                    // doesn't re-push (would require reloading the receiver and losing position).
+                    val externalSubtitles = selectedAddonSubtitle?.let {
+                        listOf(CastSubtitle(url = it.url, language = it.language, label = it.display))
+                    }.orEmpty()
                     cast.loadMedia(
                         CastMediaRequest(
                             url = activeSourceUrl,
@@ -24,6 +31,7 @@ internal fun PlayerScreenRuntime.BindCastEffects() {
                             posterUrl = poster ?: background,
                             headers = activeSourceHeaders,
                             startPositionMs = playbackSnapshot.positionMs.coerceAtLeast(0L),
+                            subtitles = externalSubtitles,
                         ),
                     )
                     shouldPlay = false
