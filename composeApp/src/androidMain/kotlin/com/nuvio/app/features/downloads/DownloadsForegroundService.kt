@@ -15,6 +15,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.nuvio.app.MainActivity
 import com.nuvio.app.R
@@ -35,9 +36,9 @@ internal class DownloadsForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    internal fun detachNotificationAndStop() {
+    internal fun detachNotificationAndStop(keepNotification: Boolean) {
         mainHandler.post {
-            stopForeground(STOP_FOREGROUND_DETACH)
+            stopForeground(if (keepNotification) STOP_FOREGROUND_DETACH else STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
     }
@@ -189,6 +190,7 @@ internal class DownloadsForegroundService : Service() {
         }
 
         fun release(context: Context, downloadId: String) {
+            val keepNotification = shouldKeepNotification(downloadId)
             val outcome = synchronized(activeDownloads) {
                 val previousPrimaryId = activeDownloads.keys.firstOrNull()
                 activeDownloads.remove(downloadId)
@@ -203,13 +205,32 @@ internal class DownloadsForegroundService : Service() {
             if (outcome.shouldStop) {
                 val instance = instanceRef
                 if (instance != null) {
-                    instance.detachNotificationAndStop()
+                    instance.detachNotificationAndStop(keepNotification)
                 } else {
                     val intent = Intent(context, DownloadsForegroundService::class.java)
                     runCatching { context.stopService(intent) }
+                    if (!keepNotification) cancelNotification(context, downloadId)
                 }
-            } else if (outcome.primaryChanged && outcome.nextPrimary != null) {
-                instanceRef?.swapPrimary(outcome.nextPrimary)
+            } else {
+                if (outcome.primaryChanged && outcome.nextPrimary != null) {
+                    instanceRef?.swapPrimary(outcome.nextPrimary)
+                }
+                if (!keepNotification) cancelNotification(context, downloadId)
+            }
+        }
+
+        private fun shouldKeepNotification(downloadId: String): Boolean {
+            val status = DownloadsRepository.uiState.value.items
+                .firstOrNull { it.id == downloadId }
+                ?.status
+            return status == DownloadStatus.Completed ||
+                status == DownloadStatus.Paused ||
+                status == DownloadStatus.Failed
+        }
+
+        private fun cancelNotification(context: Context, downloadId: String) {
+            runCatching {
+                NotificationManagerCompat.from(context).cancel(abs(downloadId.hashCode()))
             }
         }
 

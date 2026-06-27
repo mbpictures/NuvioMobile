@@ -40,34 +40,39 @@ internal actual object DownloadsLiveStatusPlatform {
             .orEmpty()
             .toMutableSet()
 
-        val activeItems = items.filter { item ->
-            item.status == DownloadStatus.Downloading ||
-                item.status == DownloadStatus.Paused ||
-                item.status == DownloadStatus.Failed
-        }
-
         val trackedNow = mutableSetOf<String>()
-        activeItems.forEach { item ->
-            val renderState = RenderState(
-                status = item.status,
-                progressPercent = progressPercent(item),
-                downloadedBucket = item.downloadedBytes / (512L * 1024L),
-                totalBytes = item.totalBytes,
-                errorMessage = item.errorMessage,
-            )
+        val justCompletedIds = mutableSetOf<String>()
 
-            val existingState = lastRenderStateById[item.id]
-            if (existingState == renderState) {
-                trackedNow += item.id
-                return@forEach
+        items.forEach { item ->
+            when (item.status) {
+                DownloadStatus.Downloading,
+                DownloadStatus.Paused,
+                DownloadStatus.Failed,
+                -> {
+                    trackedNow += item.id
+                    val renderState = RenderState(
+                        status = item.status,
+                        progressPercent = progressPercent(item),
+                        downloadedBucket = item.downloadedBytes / (512L * 1024L),
+                        totalBytes = item.totalBytes,
+                        errorMessage = item.errorMessage,
+                    )
+                    if (lastRenderStateById[item.id] == renderState) return@forEach
+                    manager.notify(notificationId(item.id), buildNotification(context, item))
+                    lastRenderStateById[item.id] = renderState
+                }
+
+                DownloadStatus.Completed -> {
+                    if (trackedBefore.contains(item.id)) {
+                        manager.notify(notificationId(item.id), buildNotification(context, item))
+                        lastRenderStateById.remove(item.id)
+                        justCompletedIds += item.id
+                    }
+                }
             }
-
-            manager.notify(notificationId(item.id), buildNotification(context, item))
-            lastRenderStateById[item.id] = renderState
-            trackedNow += item.id
         }
 
-        val staleIds = trackedBefore - trackedNow
+        val staleIds = trackedBefore - trackedNow - justCompletedIds
         staleIds.forEach { downloadId ->
             manager.cancel(notificationId(downloadId))
             lastRenderStateById.remove(downloadId)
@@ -127,9 +132,17 @@ internal actual object DownloadsLiveStatusPlatform {
                 }
             }
 
+            DownloadStatus.Completed -> {
+                // A finished download: a dismissible "Download completed" notice, no progress or actions.
+                notificationBuilder
+                    .setOngoing(false)
+                    .setAutoCancel(true)
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .setProgress(0, 0, false)
+            }
+
             DownloadStatus.Paused,
             DownloadStatus.Failed,
-            DownloadStatus.Completed,
             -> {
                 notificationBuilder
                     .setOngoing(false)

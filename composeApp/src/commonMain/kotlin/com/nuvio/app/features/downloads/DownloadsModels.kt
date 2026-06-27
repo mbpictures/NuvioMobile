@@ -37,6 +37,7 @@ data class DownloadItem(
     val providerName: String,
     val providerAddonId: String? = null,
     val sourceUrl: String,
+    val isHlsStream: Boolean = false,
     val sourceHeaders: Map<String, String> = emptyMap(),
     val sourceResponseHeaders: Map<String, String> = emptyMap(),
     val localFileUri: String? = null,
