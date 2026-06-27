@@ -90,7 +90,7 @@ internal actual object DownloadsPlatformDownloader {
             foregroundRetained = true
         }
 
-        scope.launch {
+        val downloadJob = scope.launch {
             val context = appContext
             if (context == null) {
                 onFailure(runBlocking { getString(Res.string.downloads_error_not_initialized) })
@@ -194,7 +194,7 @@ internal actual object DownloadsPlatformDownloader {
             }
         }
 
-        job.invokeOnCompletion {
+        downloadJob.invokeOnCompletion {
             call?.cancel()
             if (foregroundRetained && keepAliveContext != null) {
                 DownloadsForegroundService.release(keepAliveContext, request.downloadId)
