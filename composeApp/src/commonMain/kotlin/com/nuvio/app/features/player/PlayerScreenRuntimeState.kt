@@ -29,6 +29,7 @@ internal class PlayerScreenRuntime(
     var args by mutableStateOf(args)
 
     val title: String get() = args.title
+    val profileId: Int get() = args.profileId
     val sourceUrl: String get() = args.sourceUrl
     val sourceAudioUrl: String? get() = args.sourceAudioUrl
     val sourceHeaders: Map<String, String> get() = args.sourceHeaders
@@ -57,6 +58,7 @@ internal class PlayerScreenRuntime(
     val torrentTrackers: List<String> get() = args.torrentTrackers
     val initialPositionMs: Long get() = args.initialPositionMs
     val initialProgressFraction: Float? get() = args.initialProgressFraction
+    val externalSubtitles: List<com.nuvio.app.features.streams.StreamSubtitle> get() = args.externalSubtitles
     val isSeries: Boolean get() = parentMetaType == "series"
 
     lateinit var scope: CoroutineScope
