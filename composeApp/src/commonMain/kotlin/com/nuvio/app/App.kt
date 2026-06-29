@@ -1323,6 +1323,7 @@ private fun MainAppContent(
                 )
             }
             val playerLaunch = PlayerLaunch(
+                profileId = activePlaybackProfileId,
                 title = target.title,
                 sourceUrl = sourceUrl,
                 sourceHeaders = sanitizePlaybackHeaders(stream.behaviorHints.proxyHeaders?.request),
