@@ -34,6 +34,11 @@ internal actual object PlayerSettingsStorage {
     private const val externalPlayerEnabledKey = "external_player_enabled"
     private const val externalPlayerForwardSubtitlesKey = "external_player_forward_subtitles"
     private const val externalPlayerIdKey = "external_player_id"
+    private const val externalPlayerSendSkipSegmentsKey = "external_player_send_skip_segments"
+    private const val androidPlaybackEngineKey = "android_playback_engine"
+    private const val androidLibmpvVideoOutputKey = "android_libmpv_video_output"
+    private const val androidLibmpvHardwareDecodingEnabledKey = "android_libmpv_hardware_decoding_enabled"
+    private const val androidLibmpvYuv420pEnabledKey = "android_libmpv_yuv420p_enabled"
     private const val preferredAudioLanguageKey = "preferred_audio_language"
     private const val secondaryPreferredAudioLanguageKey = "secondary_preferred_audio_language"
     private const val preferredSubtitleLanguageKey = "preferred_subtitle_language"
@@ -195,6 +200,38 @@ internal actual object PlayerSettingsStorage {
 
     actual fun saveExternalPlayerForwardSubtitles(enabled: Boolean) {
         saveBoolean(externalPlayerForwardSubtitlesKey, enabled)
+    }
+
+    actual fun loadExternalPlayerSendSkipSegments(): Boolean? = loadBoolean(externalPlayerSendSkipSegmentsKey)
+
+    actual fun saveExternalPlayerSendSkipSegments(enabled: Boolean) {
+        saveBoolean(externalPlayerSendSkipSegmentsKey, enabled)
+    }
+
+    // Android libmpv engine settings have no effect on the desktop player backend,
+    // but the common expect requires implementations, so persist them as plain prefs.
+    actual fun loadAndroidPlaybackEngine(): String? = loadString(androidPlaybackEngineKey)
+
+    actual fun saveAndroidPlaybackEngine(engine: String) {
+        saveString(androidPlaybackEngineKey, engine)
+    }
+
+    actual fun loadAndroidLibmpvVideoOutput(): String? = loadString(androidLibmpvVideoOutputKey)
+
+    actual fun saveAndroidLibmpvVideoOutput(output: String) {
+        saveString(androidLibmpvVideoOutputKey, output)
+    }
+
+    actual fun loadAndroidLibmpvHardwareDecodingEnabled(): Boolean? = loadBoolean(androidLibmpvHardwareDecodingEnabledKey)
+
+    actual fun saveAndroidLibmpvHardwareDecodingEnabled(enabled: Boolean) {
+        saveBoolean(androidLibmpvHardwareDecodingEnabledKey, enabled)
+    }
+
+    actual fun loadAndroidLibmpvYuv420pEnabled(): Boolean? = loadBoolean(androidLibmpvYuv420pEnabledKey)
+
+    actual fun saveAndroidLibmpvYuv420pEnabled(enabled: Boolean) {
+        saveBoolean(androidLibmpvYuv420pEnabledKey, enabled)
     }
 
     actual fun loadExternalPlayerId(): String? = loadString(externalPlayerIdKey)
