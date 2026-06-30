@@ -300,7 +300,9 @@ val isDebugBuild = booleanConfigValue("NUVIO_DEBUG_BUILD")
 
 val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generateRuntimeConfigs") {
     outputDir.set(generatedRuntimeConfigDir)
-    localPropertiesFile.set(rootProject.layout.projectDirectory.file("local.properties"))
+    rootProject.file("local.properties").takeIf { it.exists() }?.let {
+        localPropertiesFile.set(it)
+    }
     appVersionName.set(releaseAppVersionName)
     appVersionCode.set(releaseAppVersionCode)
     supabaseUrl.set(runtimeConfigValue("SUPABASE_URL"))
