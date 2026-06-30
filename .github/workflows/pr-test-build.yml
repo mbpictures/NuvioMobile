@@ -132,17 +132,17 @@ jobs:
           donations-donate-url: ${{ secrets.DONATIONS_DONATE_URL }}
 
       - name: Build Android APK (full, debug)
-        run: ./gradlew :composeApp:assembleFullDebug --stacktrace
+        run: ./gradlew :androidApp:assembleFullDebug -Pnuvio.android.distribution=full --stacktrace
 
       - name: Stage APK with descriptive name
         id: stage
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          src=$(ls composeApp/build/outputs/apk/full/debug/composeApp-full-debug*.apk 2>/dev/null | head -n1 || true)
+          src=$(ls androidApp/build/outputs/apk/full/debug/androidApp-full-debug*.apk 2>/dev/null | head -n1 || true)
           if [[ -z "$src" ]]; then
-            echo "::error::Built APK not found under composeApp/build/outputs/apk/full/debug/"
-            ls -la composeApp/build/outputs/apk/full/debug/ || true
+            echo "::error::Built APK not found under androidApp/build/outputs/apk/full/debug/"
+            ls -la androidApp/build/outputs/apk/full/debug/ || true
             exit 1
           fi
           apk_name="Nuvio-pr${PR_NUMBER}-${SHORT_SHA}-full-debug.apk"
