@@ -48,8 +48,11 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Compile Android (full + playstore, debug)
-        run: ./gradlew :composeApp:assembleFullDebug :composeApp:assemblePlaystoreDebug --stacktrace
+      - name: Assemble Android (full, debug)
+        run: ./gradlew :androidApp:assembleFullDebug -Pnuvio.android.distribution=full --stacktrace
+
+      - name: Assemble Android (playstore, debug)
+        run: ./gradlew :androidApp:assemblePlaystoreDebug -Pnuvio.android.distribution=playstore --stacktrace
 
   ios:
     name: iOS (compile)

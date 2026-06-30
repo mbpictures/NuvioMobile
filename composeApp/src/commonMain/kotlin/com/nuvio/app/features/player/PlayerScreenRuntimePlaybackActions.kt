@@ -17,6 +17,7 @@ internal val PlayerScreenRuntime.activePlaybackIdentity: String
 
 internal val PlayerScreenRuntime.playbackSession: WatchProgressPlaybackSession
     get() = WatchProgressPlaybackSession(
+        profileId = profileId,
         contentType = contentType ?: parentMetaType,
         parentMetaId = parentMetaId,
         parentMetaType = parentMetaType,
@@ -132,6 +133,7 @@ internal fun PlayerScreenRuntime.emitTraktScrobbleStart() {
         }
         currentTraktScrobbleItem = item
         TraktScrobbleRepository.scrobbleStart(
+            profileId = profileId,
             item = item,
             progressPercent = currentPlaybackProgressPercent(),
         )
@@ -148,6 +150,7 @@ internal fun PlayerScreenRuntime.emitTraktScrobbleStop(progressPercent: Float? =
     scope.launch(NonCancellable) {
         val item = itemSnapshot ?: inputsSnapshot.buildItem() ?: return@launch
         TraktScrobbleRepository.scrobbleStop(
+            profileId = profileId,
             item = item,
             progressPercent = percent,
         )

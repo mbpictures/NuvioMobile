@@ -141,11 +141,21 @@ jobs:
             echo "NUVIO_RELEASE_KEY_PASSWORD=$key_password"
           } >> local.properties
 
-      - name: Build per-ABI release APKs (full + playstore)
+      # Each distribution swaps composeApp's Android source dir, so the flavors
+      # are packaged by :androidApp in separate Gradle invocations.
+      - name: Build per-ABI release APKs (full)
         run: |
           ./gradlew \
-            :composeApp:assembleFullRelease \
-            :composeApp:assemblePlaystoreRelease \
+            :androidApp:assembleFullRelease \
+            -Pnuvio.android.distribution=full \
+            -Pnuvio.splitAbi=true \
+            --stacktrace
+
+      - name: Build per-ABI release APKs (playstore)
+        run: |
+          ./gradlew \
+            :androidApp:assemblePlaystoreRelease \
+            -Pnuvio.android.distribution=playstore \
             -Pnuvio.splitAbi=true \
             --stacktrace
 
@@ -157,10 +167,10 @@ jobs:
           mkdir -p artifacts
           for flavor in full playstore; do
             for abi in arm64-v8a armeabi-v7a x86_64; do
-              src=$(ls "composeApp/build/outputs/apk/${flavor}/release/composeApp-${flavor}-${abi}-release"*.apk 2>/dev/null | head -n1 || true)
+              src=$(ls "androidApp/build/outputs/apk/${flavor}/release/androidApp-${flavor}-${abi}-release"*.apk 2>/dev/null | head -n1 || true)
               if [[ -z "$src" ]]; then
                 echo "::error::Missing APK for ${flavor}/${abi}"
-                ls -la "composeApp/build/outputs/apk/${flavor}/release/" || true
+                ls -la "androidApp/build/outputs/apk/${flavor}/release/" || true
                 exit 1
               fi
               dest="artifacts/Nuvio-${VERSION}-android-${flavor}-${abi}.apk"
