@@ -399,12 +399,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # jpackage produces a single-architecture .app matching the build
-          # machine's CPU (it cannot make a universal binary), so we build one
-          # DMG per arch on a matching runner: Intel on macos-13, Apple Silicon
-          # on macos-15. An arm64-only DMG fails on Intel Macs with "is not
-          # supported on this Mac"; this matrix ships a native build for each.
-          - runner: macos-13   # Intel (x86_64)
+          - runner: macos-15-intel   # Intel (x86_64)
             arch: x64
           - runner: macos-15   # Apple Silicon (arm64)
             arch: arm64
