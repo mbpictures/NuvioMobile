@@ -139,51 +139,35 @@ enum {
     ccPKCS7Padding = 1,
 };
 
-typedef uint32_t CCModeOptions;
-
-typedef struct _CCCryptor *CCCryptorRef;
-
-CCCryptorStatus CCCryptorCreateWithMode(
-    CCOperation op,
-    CCMode mode,
+// Public one-shot AES-GCM (CommonCryptor.h, macOS 10.13 / iOS 11+). Replaces the
+// incremental CCCryptorGCMEncrypt/Decrypt/Final API, which is CommonCrypto SPI and
+// trips App Store static analysis (ITMS-90338 non-public API usage).
+CCCryptorStatus CCCryptorGCMOneshotEncrypt(
     CCAlgorithm alg,
-    CCPadding padding,
-    const void *iv,
     const void *key,
     size_t keyLength,
-    const void *tweak,
-    size_t tweakLength,
-    int numRounds,
-    CCModeOptions options,
-    CCCryptorRef *cryptorRef
-);
-
-CCCryptorStatus CCCryptorGCMAddAAD(
-    CCCryptorRef cryptorRef,
+    const void *iv,
+    size_t ivLen,
     const void *aData,
-    size_t aDataLen
-);
-
-CCCryptorStatus CCCryptorGCMEncrypt(
-    CCCryptorRef cryptorRef,
+    size_t aDataLen,
     const void *dataIn,
     size_t dataInLength,
-    void *dataOut
+    void *cipherOut,
+    void *tagOut,
+    size_t tagLength
 );
 
-CCCryptorStatus CCCryptorGCMDecrypt(
-    CCCryptorRef cryptorRef,
+CCCryptorStatus CCCryptorGCMOneshotDecrypt(
+    CCAlgorithm alg,
+    const void *key,
+    size_t keyLength,
+    const void *iv,
+    size_t ivLen,
+    const void *aData,
+    size_t aDataLen,
     const void *dataIn,
     size_t dataInLength,
-    void *dataOut
-);
-
-CCCryptorStatus CCCryptorGCMFinal(
-    CCCryptorRef cryptorRef,
-    void *tag,
-    size_t *tagLength
-);
-
-CCCryptorStatus CCCryptorRelease(
-    CCCryptorRef cryptorRef
+    void *dataOut,
+    const void *tagIn,
+    size_t tagLength
 );
