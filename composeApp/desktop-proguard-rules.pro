@@ -37,3 +37,4 @@
 # ProGuard can't resolve at link time and reports as a fatal unresolved-reference warning. We don't
 # shrink/optimize/obfuscate, so nothing is actually removed — suppress the false positive.
 -dontwarn dev.chrisbanes.haze.**
+-dontwarn io.github.alexzhirkevich.compottie.**
