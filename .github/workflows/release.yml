@@ -141,6 +141,17 @@ jobs:
             echo "NUVIO_RELEASE_KEY_PASSWORD=$key_password"
           } >> local.properties
 
+      - name: Cap Gradle heap for Android release (16 GB runner)
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.gradle"
+          cat >> "$HOME/.gradle/gradle.properties" <<'EOF'
+          org.gradle.jvmargs=-Xmx8g -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=1g
+          kotlin.daemon.jvmargs=-Xmx4g
+          EOF
+          # Make sure no stale daemon is hanging around with the old args.
+          ./gradlew --stop || true
+
       # Each distribution swaps composeApp's Android source dir, so the flavors
       # are packaged by :androidApp in separate Gradle invocations.
       - name: Build per-ABI release APKs (full)
