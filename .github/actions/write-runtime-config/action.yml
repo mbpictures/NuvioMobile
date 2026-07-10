@@ -73,8 +73,8 @@ runs:
         set -euo pipefail
         {
           echo ""
-          printf 'SUPABASE_URL=%s\n' "${SUPABASE_URL}"
-          printf 'SUPABASE_ANON_KEY=%s\n' "${SUPABASE_ANON_KEY}"
+          printf 'NUVIO_SUPABASE_URL=%s\n' "${SUPABASE_URL}"
+          printf 'NUVIO_SUPABASE_ANON_KEY=%s\n' "${SUPABASE_ANON_KEY}"
           printf 'TRAKT_CLIENT_ID=%s\n' "${TRAKT_CLIENT_ID}"
           printf 'TRAKT_CLIENT_SECRET=%s\n' "${TRAKT_CLIENT_SECRET}"
           # Empty input falls back to the same default the build script uses
