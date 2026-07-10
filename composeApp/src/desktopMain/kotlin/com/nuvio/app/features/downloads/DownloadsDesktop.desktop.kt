@@ -42,6 +42,8 @@ internal actual object DownloadsPlatformDownloader {
             ?.takeIf { it.exists() }
             ?.toURI()
             ?.toString()
+
+    actual fun openDownloadsDirectory(): Boolean = false
 }
 
 private fun String.toLocalFileOrNull(): File? =

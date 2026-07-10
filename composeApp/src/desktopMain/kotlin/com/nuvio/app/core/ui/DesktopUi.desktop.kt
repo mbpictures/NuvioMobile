@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
+import coil3.PlatformContext
 import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.desktop.DesktopBackDispatcher
 import com.nuvio.app.desktop.DesktopPreferences
@@ -74,7 +75,9 @@ actual fun appIconPainter(icon: AppIconResource): Painter =
         }
     )
 
-internal actual fun ImageLoader.Builder.configurePlatformImageLoader(): ImageLoader.Builder = this
+internal actual fun ImageLoader.Builder.configurePlatformImageLoader(
+    context: PlatformContext,
+): ImageLoader.Builder = this
 
 actual fun platformExitApp() {
     exitProcess(0)

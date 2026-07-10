@@ -34,11 +34,13 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -50,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
@@ -113,6 +116,7 @@ import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepositor
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.watching.application.WatchingActions
 import com.nuvio.app.features.watching.application.WatchingState
+import com.kmpalette.rememberDominantColorState
 import com.nuvio.app.isDesktop
 import com.kmpalette.extensions.painter.rememberPainterDominantColorState
 import kotlinx.coroutines.delay
@@ -330,8 +334,6 @@ internal fun MetaDetailsScreenMobile(
     LaunchedEffect(
         type,
         id,
-        displayedMeta?.id,
-        uiState.isLoading,
         traktSettingsUiState.moreLikeThisSource,
         traktAuthUiState.mode,
         tmdbSettingsUiState.enabled,
@@ -372,7 +374,7 @@ internal fun MetaDetailsScreenMobile(
     ) {
         when {
             displayedMeta == null && uiState.isLoading -> {
-                CircularProgressIndicator(
+                NuvioLoadingIndicator(
                     modifier = Modifier.align(Alignment.Center),
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -786,22 +788,43 @@ internal fun MetaDetailsScreenMobile(
                 val safeAreaTopPx = with(density) {
                     nuvioStatusBarTopPadding().toPx()
                 }
-                var heroHeightPx by remember(meta.id) { mutableIntStateOf(0) }
-                val thresholdPx = (heroHeightPx - safeAreaTopPx).coerceAtLeast(0f)
-                val detailScrollOffsetPx = if (listState.firstVisibleItemIndex == 0) {
-                    listState.firstVisibleItemScrollOffset.toFloat()
-                } else {
-                    heroHeightPx.toFloat() + listState.firstVisibleItemScrollOffset
+                val heroHeightPxState = remember(meta.id) { mutableIntStateOf(0) }
+                val heroHeightPx = heroHeightPxState.intValue
+                val detailScrollOffsetProvider = remember(listState, heroHeightPxState) {
+                    {
+                        if (listState.firstVisibleItemIndex == 0) {
+                            listState.firstVisibleItemScrollOffset.toFloat()
+                        } else {
+                            heroHeightPxState.intValue.toFloat() + listState.firstVisibleItemScrollOffset
+                        }
+                    }
                 }
-                val heroScrollOffset = detailScrollOffsetPx.toInt()
-                val headerTarget = if (
-                    heroHeightPx > 0 &&
-                    (listState.firstVisibleItemIndex > 0 || detailScrollOffsetPx > thresholdPx)
+                val isScrolledPastHeroHeaderThreshold by remember(
+                    listState,
+                    heroHeightPxState,
+                    safeAreaTopPx,
+                    detailScrollOffsetProvider,
                 ) {
-                    1f
-                } else {
-                    0f
+                    derivedStateOf {
+                        val measuredHeroHeightPx = heroHeightPxState.intValue
+                        val thresholdPx = (measuredHeroHeightPx - safeAreaTopPx).coerceAtLeast(0f)
+                        measuredHeroHeightPx > 0 &&
+                            (listState.firstVisibleItemIndex > 0 || detailScrollOffsetProvider() > thresholdPx)
+                    }
                 }
+                val isHeroTrailerWithinPlayThreshold by remember(
+                    listState,
+                    heroHeightPxState,
+                    safeAreaTopPx,
+                    detailScrollOffsetProvider,
+                ) {
+                    derivedStateOf {
+                        val measuredHeroHeightPx = heroHeightPxState.intValue
+                        val thresholdPx = (measuredHeroHeightPx - safeAreaTopPx).coerceAtLeast(0f)
+                        measuredHeroHeightPx == 0 || detailScrollOffsetProvider() <= thresholdPx
+                    }
+                }
+                val headerTarget = if (isScrolledPastHeroHeaderThreshold) 1f else 0f
                 val heroTrailerSourceUrl = heroTrailerPlaybackSource
                     ?.videoUrl
                     ?.takeIf { it.isNotBlank() && heroTrailerPlaybackEnabled && !heroTrailerFinished && !isLeavingDetails }
@@ -810,8 +833,8 @@ internal fun MetaDetailsScreenMobile(
                     ?.takeIf { heroTrailerSourceUrl != null && it.isNotBlank() }
                 val heroTrailerPlayWhenReady = heroTrailerSourceUrl != null &&
                     !isLeavingDetails &&
-                    (heroHeightPx == 0 || detailScrollOffsetPx <= thresholdPx)
-                val headerProgress by animateFloatAsState(
+                    isHeroTrailerWithinPlayThreshold
+                val headerProgressState = animateFloatAsState(
                     targetValue = headerTarget,
                     animationSpec = tween(
                         durationMillis = if (headerTarget > 0f) 150 else 100,
@@ -819,6 +842,15 @@ internal fun MetaDetailsScreenMobile(
                     ),
                     label = "detail_floating_header_progress",
                 )
+                val headerProgressProvider = remember(headerProgressState) {
+                    { headerProgressState.value }
+                }
+                val showHeroBackButton by remember(headerProgressState) {
+                    derivedStateOf { headerProgressState.value <= 0.05f }
+                }
+                val headerInteractive by remember(headerProgressState) {
+                    derivedStateOf { headerProgressState.value > 0.05f }
+                }
 
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val colorScheme = MaterialTheme.colorScheme
@@ -834,18 +866,38 @@ internal fun MetaDetailsScreenMobile(
                     var dominantBackdropPainter by remember(meta.id, backdropUrl) {
                         mutableStateOf<Painter?>(null)
                     }
-                    val dominantColorState = rememberPainterDominantColorState(
+                    var dominantBackdropImageBitmap by remember(meta.id, backdropUrl) {
+                        mutableStateOf<ImageBitmap?>(null)
+                    }
+                    val dominantImageBitmapColorState = rememberDominantColorState(
                         defaultColor = colorScheme.background,
                         defaultOnColor = colorScheme.onBackground,
                     )
-                    LaunchedEffect(dominantColorEnabled, dominantBackdropPainter) {
+                    val dominantPainterColorState = rememberPainterDominantColorState(
+                        defaultColor = colorScheme.background,
+                        defaultOnColor = colorScheme.onBackground,
+                    )
+                    LaunchedEffect(dominantColorEnabled, dominantBackdropImageBitmap, dominantBackdropPainter) {
+                        val imageBitmap = dominantBackdropImageBitmap
                         val painter = dominantBackdropPainter
-                        if (dominantColorEnabled && painter != null) {
-                            runCatching { dominantColorState.updateFrom(painter) }
+                        if (dominantColorEnabled) {
+                            when {
+                                imageBitmap != null -> runCatching {
+                                    dominantImageBitmapColorState.updateFrom(imageBitmap)
+                                }
+                                painter != null -> runCatching {
+                                    dominantPainterColorState.updateFrom(painter)
+                                }
+                            }
                         }
                     }
+                    val extractedDominantColor = if (dominantBackdropImageBitmap != null) {
+                        dominantImageBitmapColorState.color
+                    } else {
+                        dominantPainterColorState.color
+                    }
                     val dominantBackdropTargetColor = if (dominantColorEnabled) {
-                        dominantBackdropBlendColor(dominantColorState.color, colorScheme.background)
+                        dominantBackdropBlendColor(extractedDominantColor, colorScheme.background)
                     } else {
                         colorScheme.background
                     }
@@ -890,22 +942,26 @@ internal fun MetaDetailsScreenMobile(
                                 .fillMaxSize()
                                 .zIndex(1f),
                         ) {
-                            item(key = "detail-hero") {
+                            item(
+                                key = "detail-hero",
+                                contentType = "detail-hero",
+                            ) {
                                 DetailHero(
                                     meta = meta,
                                     isTablet = isTablet,
                                     viewportHeight = viewportHeight,
                                     contentMaxWidth = contentMaxWidth,
-                                    scrollOffset = heroScrollOffset,
-                                    onHeightChanged = { heroHeightPx = it },
+                                    scrollOffsetProvider = detailScrollOffsetProvider,
+                                    onHeightChanged = { heroHeightPxState.intValue = it },
                                     heroTrailerSourceUrl = heroTrailerSourceUrl,
                                     heroTrailerSourceAudioUrl = heroTrailerSourceAudioUrl,
                                     heroTrailerReady = heroTrailerReady,
                                     heroTrailerPlayWhenReady = heroTrailerPlayWhenReady,
                                     heroTrailerMuted = heroTrailerMuted,
                                     heroGradientColor = dominantBackdropColor.takeIf { dominantColorEnabled },
-                                    onBackdropLoaded = { painter ->
+                                    onBackdropLoaded = { painter, imageBitmap ->
                                         dominantBackdropPainter = painter
+                                        dominantBackdropImageBitmap = imageBitmap
                                     },
                                     onHeroTrailerMuteToggle = {
                                         HeroTrailerAudioState.toggleMuted()
@@ -1002,7 +1058,10 @@ internal fun MetaDetailsScreenMobile(
                                 animatedVisibilityScope = animatedVisibilityScope,
                             )
 
-                            item(key = "detail-bottom-spacer") {
+                            item(
+                                key = "detail-bottom-spacer",
+                                contentType = "detail-spacer",
+                            ) {
                                 Spacer(modifier = Modifier.height(nuvioSafeBottomPadding(32.dp)))
                             }
                         }
@@ -1016,7 +1075,7 @@ internal fun MetaDetailsScreenMobile(
                                     .fillMaxWidth()
                                     .height(132.dp)
                                     .graphicsLayer {
-                                        translationY = heroHeightPx.toFloat() - detailScrollOffsetPx
+                                        translationY = heroHeightPx.toFloat() - detailScrollOffsetProvider()
                                     }
                                     .background(
                                         Brush.verticalGradient(
@@ -1031,7 +1090,7 @@ internal fun MetaDetailsScreenMobile(
                             )
                         }
 
-                        if (headerProgress <= 0.05f) {
+                        if (showHeroBackButton) {
                             NuvioBackButton(
                                 onClick = onBackFromDetails,
                                 modifier = Modifier.padding(
@@ -1046,7 +1105,8 @@ internal fun MetaDetailsScreenMobile(
                         DetailFloatingHeader(
                             meta = meta,
                             isSaved = isSaved,
-                            progress = headerProgress,
+                            progressProvider = headerProgressProvider,
+                            interactive = headerInteractive,
                             backgroundColor = dominantBackdropColor.takeIf { dominantColorEnabled },
                             onBack = onBackFromDetails,
                             onToggleSaved = toggleSaved,
@@ -1448,7 +1508,15 @@ private fun LazyListScope.configuredMetaSectionItems(
         sectionItems: List<MetaScreenSectionItem>,
         forceTabLayout: Boolean = settings.tabLayout,
     ) {
-        item(key = key) {
+        val contentType = if (sectionItems.size == 1) {
+            "detail-section-${sectionItems.first().key.name}"
+        } else {
+            "detail-section-tab-group"
+        }
+        item(
+            key = key,
+            contentType = contentType,
+        ) {
             DetailSectionContainer(
                 horizontalPadding = contentHorizontalPadding,
                 contentMaxWidth = contentMaxWidth,

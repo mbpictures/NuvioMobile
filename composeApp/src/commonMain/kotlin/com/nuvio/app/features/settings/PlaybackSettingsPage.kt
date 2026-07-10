@@ -24,7 +24,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.BasicAlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import com.nuvio.app.core.ui.NuvioLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -1885,7 +1885,7 @@ private fun ReuseCacheDurationDialog(
     onDurationSelected: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val options = listOf(1, 6, 12, 24, 48, 72, 168)
+    val options = listOf(1, 2, 3, 6, 12, 24, 48, 72, 168)
 
     BasicAlertDialog(
         onDismissRequest = onDismiss,
@@ -3322,9 +3322,8 @@ private fun IntroDbApiKeyDialog(
                         enabled = !isVerifying
                     ) { 
                         if (isVerifying) {
-                            CircularProgressIndicator(
+                            NuvioLoadingIndicator(
                                 modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         } else {

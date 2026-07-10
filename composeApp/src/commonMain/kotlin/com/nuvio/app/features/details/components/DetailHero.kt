@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.painter.Painter
@@ -56,7 +57,7 @@ import org.jetbrains.compose.resources.stringResource
 fun DetailHero(
     meta: MetaDetails,
     isTablet: Boolean = false,
-    scrollOffset: Int = 0,
+    scrollOffsetProvider: () -> Float = { 0f },
     viewportHeight: Dp? = null,
     contentMaxWidth: Dp = 560.dp,
     onHeightChanged: (Int) -> Unit = {},
@@ -66,7 +67,7 @@ fun DetailHero(
     heroTrailerPlayWhenReady: Boolean = false,
     heroTrailerMuted: Boolean = true,
     heroGradientColor: Color? = null,
-    onBackdropLoaded: (Painter) -> Unit = {},
+    onBackdropLoaded: (Painter, ImageBitmap?) -> Unit = { _, _ -> },
     onHeroTrailerMuteToggle: () -> Unit = {},
     onHeroTrailerReady: () -> Unit = {},
     onHeroTrailerEnded: () -> Unit = {},
@@ -117,13 +118,18 @@ fun DetailHero(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                translationY = scrollOffset * 0.5f
+                                translationY = scrollOffsetProvider() * 0.5f
                                 scaleX = 1.08f
                                 scaleY = 1.08f
                         },
                         alignment = if (isTablet) Alignment.TopCenter else Alignment.Center,
                         contentScale = ContentScale.Crop,
-                        onSuccess = { state -> onBackdropLoaded(state.painter) },
+                        onSuccess = { state ->
+                            onBackdropLoaded(
+                                state.painter,
+                                loadedBackdropImageBitmap(state.result),
+                            )
+                        },
                     )
                 } else {
                     Box(
@@ -142,7 +148,7 @@ fun DetailHero(
                             .fillMaxSize()
                             .graphicsLayer {
                                 alpha = trailerAlpha
-                                translationY = scrollOffset * 0.5f
+                                translationY = scrollOffsetProvider() * 0.5f
                                 scaleX = 1.08f
                                 scaleY = 1.08f
                             },

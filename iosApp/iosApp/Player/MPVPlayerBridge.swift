@@ -13,6 +13,11 @@ final class MPVPlayerBridgeImpl: NSObject, NuvioPlayerBridge {
     private var pendingPictureInPictureListener: PictureInPictureStateListener?
 
     func createPlayerViewController() -> UIViewController {
+        return ensurePlayerViewController()
+    }
+
+    private func ensurePlayerViewController() -> MPVPlayerViewController {
+        if let playerVC { return playerVC }
         let vc = MPVPlayerViewController()
         self.playerVC = vc
         if #available(iOS 15.0, *), let listener = pendingPictureInPictureListener {
@@ -21,9 +26,9 @@ final class MPVPlayerBridgeImpl: NSObject, NuvioPlayerBridge {
         return vc
     }
 
-    func loadFile(url: String) { playerVC?.loadFile(url) }
+    func loadFile(url: String) { ensurePlayerViewController().loadFile(url) }
     func loadFileWithAudio(videoUrl: String, audioUrl: String?, headersJson: String?, subtitlesJson: String?) {
-        playerVC?.loadFile(
+        ensurePlayerViewController().loadFile(
             videoUrl,
             audioUrl: audioUrl,
             requestHeaders: parseRequestHeaders(headersJson),
@@ -55,6 +60,18 @@ final class MPVPlayerBridgeImpl: NSObject, NuvioPlayerBridge {
     func seekTo(positionMs: Int64) { playerVC?.seekToMs(positionMs) }
     func seekBy(offsetMs: Int64) { playerVC?.seekByMs(offsetMs) }
     func retry() { playerVC?.retryPlayback() }
+    func updateNowPlayingMetadata(
+        title: String,
+        subtitle: String?,
+        artworkUrl: String?
+    ) {
+        ensurePlayerViewController().updateNowPlayingMetadata(
+            title: title,
+            subtitle: subtitle,
+            artworkUrl: artworkUrl
+        )
+    }
+    func clearNowPlayingInfo() { playerVC?.clearNowPlayingInfo() }
     func configureVideoOutput(
         hardwareDecoder: String,
         targetColorspaceHint: Bool,
@@ -92,6 +109,9 @@ final class MPVPlayerBridgeImpl: NSObject, NuvioPlayerBridge {
     func setPlaybackSpeed(speed: Float) { playerVC?.setSpeed(speed) }
     func setMuted(muted: Bool) { playerVC?.setMuted(muted) }
     func setResizeMode(mode: Int32) { playerVC?.setResize(Int(mode)) }
+    func syncVideoSurfaceLayout(width: Double, height: Double) {
+        playerVC?.syncVideoSurfaceLayout(size: CGSize(width: width, height: height))
+    }
 
     // Audio tracks
     func getAudioTrackCount() -> Int32 { Int32(playerVC?.audioTracks.count ?? 0) }
@@ -269,14 +289,22 @@ final class MPVPlayerViewController: UIViewController {
 
     private static let defaultAudioOutput = "audiounit"
 
+    private struct CachedNowPlayingMetadata {
+        let title: String
+        let subtitle: String?
+        let artworkUrl: String?
+    }
+
     private let errorStateLock = NSLock()
     private var metalLayer = MetalLayer()
     private var lastAppliedDrawableSize: CGSize = .zero
-    private var lastBoundsForVoNudge: CGSize = .zero
-    private var voNudgeWorkItem: DispatchWorkItem?
+    private var externallyManagedViewSize: CGSize?
+    private var pendingSurfaceLayoutWorkItems: [DispatchWorkItem] = []
     private var pendingLoadRequest: PendingLoadRequest?
     private var pendingLoadRetryWorkItem: DispatchWorkItem?
     private var mpv: OpaquePointer?
+    private var cachedNowPlayingMetadata: CachedNowPlayingMetadata?
+    private lazy var nowPlayingController = PlayerNowPlayingController(owner: self)
     private lazy var eventQueue = DispatchQueue(label: "mpv-events", qos: .userInitiated)
     private var recentPlaybackLogs: [String] = []
     private var activeRequestHeaders: [String: String] = [:]
@@ -317,6 +345,10 @@ final class MPVPlayerViewController: UIViewController {
     }
     private var _currentErrorMessage: String?
 
+    override var canBecomeFirstResponder: Bool {
+        true
+    }
+
     override var prefersHomeIndicatorAutoHidden: Bool {
         true
     }
@@ -345,12 +377,15 @@ final class MPVPlayerViewController: UIViewController {
         metalLayer.framebufferOnly = true
         metalLayer.backgroundColor = UIColor.black.cgColor
         metalLayer.wantsExtendedDynamicRangeContent = true
+        metalLayer.anchorPoint = CGPoint(x: 0, y: 0)
+        metalLayer.position = .zero
         view.layer.addSublayer(metalLayer)
         layoutMetalLayer()
 
         configurePlaybackAudioSession()
         setupPictureInPictureCoordinator()
         setupMpv()
+        activateAudioSessionForPlayback()
         setupNotifications()
         refreshImmersiveSystemUI()
     }
@@ -403,18 +438,95 @@ final class MPVPlayerViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         refreshImmersiveSystemUI()
+        becomeFirstResponder()
+        UIApplication.shared.beginReceivingRemoteControlEvents()
+        publishCachedNowPlayingInfoIfNeeded()
+        syncVideoSurfaceLayout()
         attemptStartPendingLoad()
     }
 
     override func viewSafeAreaInsetsDidChange() {
         super.viewSafeAreaInsetsDidChange()
-        layoutMetalLayer()
+        syncVideoSurfaceLayout()
         refreshImmersiveSystemUI()
         attemptStartPendingLoad()
     }
 
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+
+        syncVideoSurfaceLayoutNow(scheduleDeferredPasses: false)
+        coordinator.animate(alongsideTransition: { [weak self] _ in
+            self?.syncVideoSurfaceLayoutNow(scheduleDeferredPasses: false)
+        }, completion: { [weak self] _ in
+            self?.syncVideoSurfaceLayout()
+            self?.attemptStartPendingLoad()
+        })
+    }
+
+    func syncVideoSurfaceLayout(size: CGSize) {
+        if Thread.isMainThread {
+            syncVideoSurfaceLayoutNow(size: size, scheduleDeferredPasses: true)
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.syncVideoSurfaceLayoutNow(size: size, scheduleDeferredPasses: true)
+            }
+        }
+    }
+
+    private func syncVideoSurfaceLayout() {
+        if Thread.isMainThread {
+            syncVideoSurfaceLayoutNow(size: nil, scheduleDeferredPasses: true)
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.syncVideoSurfaceLayoutNow(size: nil, scheduleDeferredPasses: true)
+            }
+        }
+    }
+
+    private func syncVideoSurfaceLayoutNow(size: CGSize? = nil, scheduleDeferredPasses: Bool) {
+        guard isViewLoaded else { return }
+        if let size, size.width > 1, size.height > 1 {
+            externallyManagedViewSize = size
+            applyExternallyManagedViewSize(size)
+        }
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        layoutMetalLayer()
+
+        if scheduleDeferredPasses {
+            scheduleDeferredSurfaceLayoutPasses()
+        }
+    }
+
+    private func scheduleDeferredSurfaceLayoutPasses() {
+        pendingSurfaceLayoutWorkItems.forEach { $0.cancel() }
+        pendingSurfaceLayoutWorkItems.removeAll(keepingCapacity: true)
+
+        [0.0, 0.05, 0.15, 0.35].forEach { delay in
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.syncVideoSurfaceLayoutNow(scheduleDeferredPasses: false)
+            }
+            pendingSurfaceLayoutWorkItems.append(workItem)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+        }
+    }
+
+    private func applyExternallyManagedViewSize(_ size: CGSize) {
+        let targetBounds = CGRect(origin: .zero, size: size)
+        if view.bounds != targetBounds {
+            view.bounds = targetBounds
+        }
+
+        var targetFrame = view.frame
+        if targetFrame.size != size {
+            targetFrame.size = size
+            view.frame = targetFrame
+        }
+    }
+
     private func layoutMetalLayer() {
-        let bounds = view.bounds
+        let bounds = CGRect(origin: .zero, size: externallyManagedViewSize ?? view.bounds.size)
         guard bounds.width > 1, bounds.height > 1 else { return }
 
         let scale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale
@@ -426,43 +538,14 @@ final class MPVPlayerViewController: UIViewController {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         metalLayer.contentsScale = scale
-        metalLayer.frame = CGRect(origin: .zero, size: bounds.size)
+        metalLayer.position = .zero
+        metalLayer.bounds = CGRect(origin: .zero, size: bounds.size)
         if drawableSize != lastAppliedDrawableSize {
+            // mpv's moltenvk context polls drawableSize and resizes its swapchain.
             metalLayer.drawableSize = drawableSize
             lastAppliedDrawableSize = drawableSize
-            scheduleVideoOutputNudgeIfNeeded(newSize: bounds.size)
         }
         CATransaction.commit()
-    }
-
-    /// MoltenVK doesn't reliably surface VK_ERROR_OUT_OF_DATE_KHR when CAMetalLayer's
-    /// drawableSize changes on a running swapchain, so mpv's vulkan VO would keep
-    /// rendering at the old extent inside the new drawable. Toggling `vid` off and
-    /// back on forces mpv to rebuild its video pipeline against the current layer
-    /// size. The trade-off is a short keyframe re-seek pause during rotation; tried
-    /// masking it with a snapshot overlay and it produced worse artifacts than the
-    /// pause itself.
-    private func scheduleVideoOutputNudgeIfNeeded(newSize: CGSize) {
-        if lastBoundsForVoNudge == .zero {
-            lastBoundsForVoNudge = newSize
-            return
-        }
-        let widthDelta = abs(newSize.width - lastBoundsForVoNudge.width)
-        let heightDelta = abs(newSize.height - lastBoundsForVoNudge.height)
-        guard widthDelta > 1 || heightDelta > 1 else { return }
-        lastBoundsForVoNudge = newSize
-
-        voNudgeWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self, let mpv = self.mpv else { return }
-            mpv_set_property_string(mpv, "vid", "no")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                guard let self, let mpv = self.mpv else { return }
-                mpv_set_property_string(mpv, "vid", "auto")
-            }
-        }
-        voNudgeWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
     }
 
     // MARK: - MPV Setup
@@ -476,7 +559,8 @@ final class MPVPlayerViewController: UIViewController {
 
         checkError(mpv_request_log_messages(mpv, "warn"))
 
-        checkError(mpv_set_option(mpv, "wid", MPV_FORMAT_INT64, &metalLayer))
+        var layerPointer = Int64(Int(bitPattern: Unmanaged.passUnretained(metalLayer).toOpaque()))
+        checkError(mpv_set_option(mpv, "wid", MPV_FORMAT_INT64, &layerPointer))
         checkError(mpv_set_option_string(mpv, "vo", "gpu-next"))
         checkError(mpv_set_option_string(mpv, "gpu-api", "vulkan"))
         checkError(mpv_set_option_string(mpv, "gpu-context", "moltenvk"))
@@ -634,12 +718,17 @@ final class MPVPlayerViewController: UIViewController {
 
     func playPlayback() {
         guard mpv != nil else { return }
+        publishNowPlayingForPlaybackSession()
         setFlag("pause", false)
+        isPlayerPlaying = true
+        syncNowPlayingPlaybackState(isPlaying: true)
     }
 
     func pausePlayback() {
         guard mpv != nil else { return }
         setFlag("pause", true)
+        isPlayerPlaying = false
+        syncNowPlayingPlaybackState(isPlaying: false)
     }
 
     func seekToMs(_ ms: Int64) {
@@ -648,10 +737,11 @@ final class MPVPlayerViewController: UIViewController {
         command("seek", args: [String(format: "%.3f", seconds), "absolute"])
     }
 
-    func seekByMs(_ ms: Int64) {
+    func seekByMs(_ ms: Int64, exact: Bool = false) {
         guard mpv != nil else { return }
         let seconds = Double(ms) / 1000.0
-        command("seek", args: [String(format: "%.3f", seconds), "relative"])
+        let seekMode = exact ? "relative+exact" : "relative"
+        command("seek", args: [String(format: "%.3f", seconds), seekMode])
     }
 
     func retryPlayback() {
@@ -847,19 +937,41 @@ final class MPVPlayerViewController: UIViewController {
 
     func destroyPlayer() {
         NotificationCenter.default.removeObserver(self)
+        UIApplication.shared.endReceivingRemoteControlEvents()
+        resignFirstResponder()
         pendingLoadRetryWorkItem?.cancel()
         pendingLoadRetryWorkItem = nil
-        voNudgeWorkItem?.cancel()
-        voNudgeWorkItem = nil
+        pendingSurfaceLayoutWorkItems.forEach { $0.cancel() }
+        pendingSurfaceLayoutWorkItems.removeAll(keepingCapacity: false)
         pendingLoadRequest = nil
+        nowPlayingController.invalidate()
         clearPlaybackError()
         if #available(iOS 15.0, *) {
             pipCoordinator?.detachFromHost()
         }
         pictureInPictureCoordinator = nil
+        deactivateAudioSession()
         guard let ctx = mpv else { return }
         mpv = nil  // nil first so event loop stops reading
         mpv_terminate_destroy(ctx)
+    }
+
+    private func activateAudioSessionForPlayback() {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .moviePlayback)
+            try session.setActive(true)
+        } catch {
+            print("[NowPlaying] Failed to activate audio session: \(error)")
+        }
+    }
+
+    private func deactivateAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            print("[NowPlaying] Failed to deactivate audio session: \(error)")
+        }
     }
 
     // MARK: - State Update
@@ -885,6 +997,20 @@ final class MPVPlayerViewController: UIViewController {
         positionMs = Int64(max(position, 0) * 1000)
         bufferedMs = Int64(max(position + cached, 0) * 1000)
         currentSpeed = Float(speed > 0 ? speed : 1.0)
+
+        let shouldPublishNowPlayingState = !isPlayerLoading || isPlayerPlaying || durationMs > 0 || positionMs > 0
+        if shouldPublishNowPlayingState {
+            syncNowPlayingPlaybackState(isPlaying: isPlayerPlaying)
+        }
+    }
+
+    private func syncNowPlayingPlaybackState(isPlaying: Bool) {
+        nowPlayingController.syncPlayback(
+            positionMs: positionMs,
+            durationMs: durationMs,
+            isPlaying: isPlaying,
+            playbackSpeed: currentSpeed
+        )
     }
 
     /// Full state + track refresh — called from MPV event loop on property changes.
@@ -932,6 +1058,48 @@ final class MPVPlayerViewController: UIViewController {
         }
         audioTracks = audio
         subtitleTracks = subs
+    }
+
+    func updateNowPlayingMetadata(
+        title: String,
+        subtitle: String?,
+        artworkUrl: String?
+    ) {
+        cachedNowPlayingMetadata = CachedNowPlayingMetadata(
+            title: title,
+            subtitle: subtitle,
+            artworkUrl: artworkUrl
+        )
+        nowPlayingController.updateMetadata(
+            title: title,
+            subtitle: subtitle,
+            artworkUrl: artworkUrl
+        )
+        publishNowPlayingForPlaybackSession()
+    }
+
+    func clearNowPlayingInfo() {
+        cachedNowPlayingMetadata = nil
+        nowPlayingController.clear()
+    }
+
+    private func publishCachedNowPlayingInfoIfNeeded() {
+        guard let metadata = cachedNowPlayingMetadata else { return }
+        nowPlayingController.updateMetadata(
+            title: metadata.title,
+            subtitle: metadata.subtitle,
+            artworkUrl: metadata.artworkUrl
+        )
+    }
+
+    private func publishNowPlayingForPlaybackSession() {
+        activateAudioSessionForPlayback()
+        if isViewLoaded, view.window != nil {
+            becomeFirstResponder()
+        }
+        UIApplication.shared.beginReceivingRemoteControlEvents()
+        publishCachedNowPlayingInfoIfNeeded()
+        syncNowPlayingPlaybackState(isPlaying: isPlayerPlaying)
     }
 
     private func getTrackString(_ index: Int, _ field: String) -> String {
@@ -1077,7 +1245,13 @@ final class MPVPlayerViewController: UIViewController {
                         self.clearPlaybackError()
                         self.isPlayerLoading = false
                         self.updateState()
+                        self.publishNowPlayingForPlaybackSession()
                         self.logCurrentAudioOutput()
+                    }
+                case MPV_EVENT_PLAYBACK_RESTART:
+                    DispatchQueue.main.async {
+                        self.updateState()
+                        self.publishNowPlayingForPlaybackSession()
                     }
                 case MPV_EVENT_END_FILE:
                     if let data = eventPtr.pointee.data {

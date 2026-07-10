@@ -540,9 +540,6 @@
     <string name="settings_account_status">ステータス</string>
     <string name="settings_account_status_anonymous">匿名</string>
     <string name="settings_account_status_signed_in">サインイン済み</string>
-    <string name="settings_account_sync_backend">同期バックエンド</string>
-    <string name="debug_backend_switch_confirm_title">バックエンドを切り替えますか？</string>
-    <string name="debug_backend_switch_confirm_message">%1$s に切り替えてサインアウトしますか？選択したバックエンドで再度サインインできます。</string>
     <string name="settings_appearance_amoled_black">AMOLED ブラック</string>
     <string name="settings_appearance_amoled_description">OLEDスクリーン向けに純粋な黒背景を使用します。</string>
     <string name="settings_appearance_app_language">アプリの言語</string>
@@ -791,7 +788,7 @@
     <string name="community_section_description">Mobile・TV・Webを通じてNuvioを構築・支援している人々をご覧ください。</string>
     <string name="community_donation_progress_title">今月のサーバー・メンテナンス費用</string>
     <string name="community_donation_progress_complete">達成済み。追加のサポートは開発費に充てられます。</string>
-    <string name="community_donation_progress_remaining">100%%を超えた追加サポートは開発費に充てられます。</string>
+    <string name="community_donation_progress_remaining">100%を超えた追加サポートは開発費に充てられます。</string>
     <string name="community_loading_donation_progress">資金調達状況を読み込み中...</string>
     <string name="community_supporters_not_configured">サポーターAPIが設定されていません。local.propertiesにDONATIONS_BASE_URLを追加してください。</string>
     <string name="community_tab_contributors">コントリビューター</string>
