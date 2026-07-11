@@ -791,6 +791,8 @@ struct ComposeView: UIViewControllerRepresentable {
         NuvioCastRegistration.register()
         // Register the DLNA/UPnP bridge (requires the multicast entitlement to discover devices).
         NuvioDlnaRegistration.register()
+        // Register the CryptoKit AES-GCM bridge (CommonCrypto GCM is SPI; see NuvioCryptoBridge).
+        NuvioCryptoRegistration.register()
 
         let controller = MainViewControllerKt.MainViewController()
         controller.view.backgroundColor = UIColor(red: 0.008, green: 0.016, blue: 0.016, alpha: 1.0)

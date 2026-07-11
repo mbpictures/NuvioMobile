@@ -116,38 +116,16 @@ internal fun pluginAesEncrypt(
 
     val isGcm = mode.uppercase().contains("GCM")
     if (isGcm) {
-        val cipherTextBytes = ByteArray(data.size)
-        val tagBytes = ByteArray(16)
-        key.usePinned { pinnedKey ->
-            iv.usePinned { pinnedIv ->
-                data.usePinned { pinnedData ->
-                    cipherTextBytes.usePinned { pinnedCipher ->
-                        tagBytes.usePinned { pinnedTag ->
-                            val status = CCCryptorGCMOneshotEncrypt(
-                                alg = kCCAlgorithmAES,
-                                key = if (key.isNotEmpty()) pinnedKey.addressOf(0) else null,
-                                keyLength = key.size.toULong(),
-                                iv = if (iv.isNotEmpty()) pinnedIv.addressOf(0) else null,
-                                ivLen = iv.size.toULong(),
-                                aData = null,
-                                aDataLen = 0UL,
-                                dataIn = if (data.isNotEmpty()) pinnedData.addressOf(0) else null,
-                                dataInLength = data.size.toULong(),
-                                cipherOut = if (data.isNotEmpty()) pinnedCipher.addressOf(0) else null,
-                                tagOut = pinnedTag.addressOf(0),
-                                tagLength = tagBytes.size.toULong(),
-                            )
-                            if (status != kCCSuccess) {
-                                error("CCCryptorGCMOneshotEncrypt failed with status: $status")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return cipherTextBytes + tagBytes
+        // CommonCrypto's AES-GCM is SPI (non-public, ITMS-90338); delegate to the CryptoKit bridge.
+        // Bridge returns ciphertext || 16-byte tag as hex.
+        val resultHex = cryptoBridge().aesGcmEncryptHex(
+            keyHex = key.toHex(),
+            ivHex = iv.toHex(),
+            dataHex = data.toHex(),
+        ) ?: error("AES-GCM encryption failed (CryptoKit bridge)")
+        return pluginHexToByteArray(resultHex)
     }
-    
+
     val isEcb = mode.uppercase().contains("ECB")
     val isNoPadding = mode.uppercase().contains("NOPADDING")
 
@@ -214,43 +192,16 @@ internal fun pluginAesDecrypt(
     val isGcm = mode.uppercase().contains("GCM")
     if (isGcm) {
         require(data.size >= 16) { "Data too short for GCM decryption" }
-        val ciphertextLen = data.size - 16
-        val ciphertext = data.copyOfRange(0, ciphertextLen)
-        val tagBytes = data.copyOfRange(ciphertextLen, data.size)
-
-        val plainTextBytes = ByteArray(ciphertextLen)
-        key.usePinned { pinnedKey ->
-            iv.usePinned { pinnedIv ->
-                ciphertext.usePinned { pinnedCipher ->
-                    tagBytes.usePinned { pinnedTag ->
-                        plainTextBytes.usePinned { pinnedPlain ->
-                            // CCCryptorGCMOneshotDecrypt verifies the tag internally and
-                            // returns a non-success status when authentication fails.
-                            val status = CCCryptorGCMOneshotDecrypt(
-                                alg = kCCAlgorithmAES,
-                                key = if (key.isNotEmpty()) pinnedKey.addressOf(0) else null,
-                                keyLength = key.size.toULong(),
-                                iv = if (iv.isNotEmpty()) pinnedIv.addressOf(0) else null,
-                                ivLen = iv.size.toULong(),
-                                aData = null,
-                                aDataLen = 0UL,
-                                dataIn = if (ciphertextLen > 0) pinnedCipher.addressOf(0) else null,
-                                dataInLength = ciphertextLen.toULong(),
-                                dataOut = if (ciphertextLen > 0) pinnedPlain.addressOf(0) else null,
-                                tagIn = pinnedTag.addressOf(0),
-                                tagLength = tagBytes.size.toULong(),
-                            )
-                            if (status != kCCSuccess) {
-                                error("CCCryptorGCMOneshotDecrypt failed with status: $status (tag verification failed)")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return plainTextBytes
+        // Delegate to CryptoKit (see NuvioCryptoBridge). CryptoKit verifies the tag internally and
+        // fails closed on authentication mismatch. Input is ciphertext || 16-byte tag as hex.
+        val plainHex = cryptoBridge().aesGcmDecryptHex(
+            keyHex = key.toHex(),
+            ivHex = iv.toHex(),
+            dataHex = data.toHex(),
+        ) ?: error("AES-GCM decryption failed (authentication or CryptoKit bridge)")
+        return pluginHexToByteArray(plainHex)
     }
-    
+
     val isEcb = mode.uppercase().contains("ECB")
     val isNoPadding = mode.uppercase().contains("NOPADDING")
 
@@ -415,6 +366,11 @@ private fun requireValidAesKey(key: ByteArray) {
         "AES key must be 16, 24, or 32 bytes"
     }
 }
+
+/** AES-GCM is delegated to CryptoKit via [NuvioCryptoBridge]; Swift registers the factory at launch. */
+private fun cryptoBridge(): NuvioCryptoBridge =
+    NuvioCryptoBridgeFactory.create()
+        ?: error("NuvioCryptoBridge not registered; AES-GCM unavailable on iOS")
 
 private fun ByteArray.toHex(): String =
     joinToString(separator = "") { byte ->

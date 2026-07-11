@@ -115,59 +115,7 @@ CCCryptorStatus CCCrypt(
     size_t *dataOutMoved
 );
 
-typedef uint32_t CCMode;
-enum {
-    kCCModeECB = 1,
-    kCCModeCBC = 2,
-    kCCModeCFB = 3,
-    kCCModeOFB = 4,
-    kCCModeCFB8 = 5,
-    kCCModeCTR = 6,
-    kCCModeF8 = 7,
-    kCCModeLRW = 8,
-    kCCModeOFB8 = 9,
-    kCCModeXTS = 10,
-    kCCModeRC4 = 11,
-    kCCModeCFB128 = 12,
-    kCCModeGCM = 13,
-    kCCModeCCM = 14,
-};
-
-typedef uint32_t CCPadding;
-enum {
-    ccNoPadding = 0,
-    ccPKCS7Padding = 1,
-};
-
-// Public one-shot AES-GCM (CommonCryptor.h, macOS 10.13 / iOS 11+). Replaces the
-// incremental CCCryptorGCMEncrypt/Decrypt/Final API, which is CommonCrypto SPI and
-// trips App Store static analysis (ITMS-90338 non-public API usage).
-CCCryptorStatus CCCryptorGCMOneshotEncrypt(
-    CCAlgorithm alg,
-    const void *key,
-    size_t keyLength,
-    const void *iv,
-    size_t ivLen,
-    const void *aData,
-    size_t aDataLen,
-    const void *dataIn,
-    size_t dataInLength,
-    void *cipherOut,
-    void *tagOut,
-    size_t tagLength
-);
-
-CCCryptorStatus CCCryptorGCMOneshotDecrypt(
-    CCAlgorithm alg,
-    const void *key,
-    size_t keyLength,
-    const void *iv,
-    size_t ivLen,
-    const void *aData,
-    size_t aDataLen,
-    const void *dataIn,
-    size_t dataInLength,
-    void *dataOut,
-    const void *tagIn,
-    size_t tagLength
-);
+// AES-GCM is intentionally absent here. Every CommonCrypto GCM entry point — the incremental
+// CCCryptorGCMEncrypt/Decrypt/Final and the one-shot CCCryptorGCMOneshotEncrypt/Decrypt — lives in
+// CommonCryptorSPI.h and is non-public API that App Store static analysis rejects (ITMS-90338).
+// GCM is handled by CryptoKit through NuvioCryptoBridge (Swift) instead; see PluginCrypto.ios.kt.
