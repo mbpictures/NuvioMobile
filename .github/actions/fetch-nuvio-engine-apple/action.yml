@@ -1,0 +1,64 @@
+name: Fetch Nuvio Engine Apple XCFramework
+description: >
+  Materialise the Nuvio Engine Apple XCFramework at the path composeApp's
+  build script expects (../nuvio-engine/platform/apple/NuvioEngine.xcframework,
+  i.e. a sibling of the repository checkout).
+
+  The iOS "full" distribution cinterops against libCNuvioEngine.a and fails at
+  Gradle configuration time with "Build the local Nuvio Engine Apple
+  XCFramework before compiling iOS Full." when it is absent. Upstream builds
+  that framework from a local nuvio-engine checkout; CI instead downloads the
+  prebuilt release asset published by NuvioMedia/nuvio-engine, which ships the
+  exact xcframework layout the build expects.
+
+  Keep the version in step with the vendored Android AAR
+  (composeApp/libs/lib-nuvio-engine-android-<version>.aar) so both platforms
+  run the same engine.
+
+inputs:
+  version:
+    description: nuvio-engine release version (tag is v<version>).
+    required: false
+    default: "0.1.0"
+  github-token:
+    description: Token used for the release download (avoids anonymous API rate limits).
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Download and unpack XCFramework
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token || github.token }}
+        ENGINE_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        workdir="$(mktemp -d)"
+        asset="nuvio-engine-apple-${ENGINE_VERSION}.zip"
+        gh release download "v${ENGINE_VERSION}" \
+          --repo NuvioMedia/nuvio-engine \
+          --pattern "$asset" \
+          --dir "$workdir"
+        unzip -q "$workdir/$asset" -d "$workdir/unpacked"
+
+        target="${GITHUB_WORKSPACE}/../nuvio-engine/platform/apple"
+        mkdir -p "$target"
+        rm -rf "$target/NuvioEngine.xcframework"
+        mv "$workdir/unpacked/nuvio-engine-apple-${ENGINE_VERSION}/NuvioEngine.xcframework" "$target/"
+        rm -rf "$workdir"
+
+    - name: Verify XCFramework slices
+      shell: bash
+      run: |
+        set -euo pipefail
+        framework="${GITHUB_WORKSPACE}/../nuvio-engine/platform/apple/NuvioEngine.xcframework"
+        for slice in ios-arm64 ios-arm64_x86_64-simulator; do
+          lib="$framework/$slice/libCNuvioEngine.a"
+          if [ ! -f "$lib" ]; then
+            echo "::error::Missing $lib — the iOS full distribution cannot link the engine."
+            exit 1
+          fi
+        done
+        echo "Nuvio Engine XCFramework ready at $framework"
