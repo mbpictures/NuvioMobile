@@ -32,6 +32,7 @@ actual object AppUpdaterPlatform {
         .build()
 
     actual val isSupported: Boolean = isWindows || isMac
+    actual val isDebugBuild: Boolean = false
 
     actual fun getSupportedAbis(): List<String> = emptyList()
 

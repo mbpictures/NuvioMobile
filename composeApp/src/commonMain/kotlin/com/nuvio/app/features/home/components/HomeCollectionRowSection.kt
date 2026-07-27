@@ -15,8 +15,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -25,15 +23,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.core.ui.NuvioCardDepthSurface
 import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.PosterLandscapeAspectRatio
 import com.nuvio.app.core.ui.landscapePosterWidth
+import com.nuvio.app.core.ui.nuvioCardDepth
 import com.nuvio.app.core.ui.posterCardClickable
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.collection.Collection
 import com.nuvio.app.features.collection.CollectionFolder
-import com.nuvio.app.features.home.HomeCatalogSettingsRepository
 import com.nuvio.app.features.home.PosterShape
 
 @Composable
@@ -41,7 +39,7 @@ fun HomeCollectionRowSection(
     collection: Collection,
     modifier: Modifier = Modifier,
     sectionPadding: Dp? = null,
-    animateGifsProvider: () -> Boolean = { true },
+    animateGifs: Boolean = true,
     onFolderClick: ((collectionId: String, folderId: String) -> Unit)? = null,
 ) {
     if (collection.folders.isEmpty()) return
@@ -51,7 +49,7 @@ fun HomeCollectionRowSection(
             collection = collection,
             modifier = modifier.fillMaxWidth(),
             sectionPadding = sectionPadding,
-            animateGifsProvider = animateGifsProvider,
+            animateGifs = animateGifs,
             onFolderClick = onFolderClick,
         )
     } else {
@@ -60,7 +58,7 @@ fun HomeCollectionRowSection(
                 collection = collection,
                 modifier = Modifier.fillMaxWidth(),
                 sectionPadding = homeSectionHorizontalPaddingForWidth(maxWidth.value),
-                animateGifsProvider = animateGifsProvider,
+                animateGifs = animateGifs,
                 onFolderClick = onFolderClick,
             )
         }
@@ -72,26 +70,20 @@ private fun HomeCollectionRowSectionContent(
     collection: Collection,
     modifier: Modifier,
     sectionPadding: Dp,
-    animateGifsProvider: () -> Boolean,
+    animateGifs: Boolean,
     onFolderClick: ((collectionId: String, folderId: String) -> Unit)?,
 ) {
-    val homeCatalogSettings by remember {
-        HomeCatalogSettingsRepository.snapshot()
-        HomeCatalogSettingsRepository.uiState
-    }.collectAsStateWithLifecycle()
-
     NuvioShelfSection(
         title = collection.title,
         entries = collection.folders,
         modifier = modifier,
         headerHorizontalPadding = sectionPadding,
         rowContentPadding = PaddingValues(horizontal = sectionPadding),
-        showHeaderAccent = !homeCatalogSettings.hideCatalogUnderline,
         key = { folder -> "collection_${collection.id}_folder_${folder.id}" },
     ) { folder ->
         CollectionFolderCard(
             folder = folder,
-            animateGifsProvider = animateGifsProvider,
+            animateGifs = animateGifs,
             onClick = onFolderClick?.let { { it(collection.id, folder.id) } },
         )
     }
@@ -101,7 +93,7 @@ private fun HomeCollectionRowSectionContent(
 private fun CollectionFolderCard(
     folder: CollectionFolder,
     modifier: Modifier = Modifier,
-    animateGifsProvider: () -> Boolean = { true },
+    animateGifs: Boolean = true,
     onClick: (() -> Unit)? = null,
 ) {
     val posterCardStyle = rememberPosterCardStyleUiState()
@@ -134,7 +126,11 @@ private fun CollectionFolderCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(aspectRatio),
+                .aspectRatio(aspectRatio)
+                .nuvioCardDepth(
+                    shape = shapeCorner,
+                    surface = NuvioCardDepthSurface.Posters,
+                ),
             shape = shapeCorner,
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -154,7 +150,7 @@ private fun CollectionFolderCard(
                             contentDescription = folder.title,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
-                            animateIfPossible = animateGifsProvider() && isAnimatedCollectionFolderImage(folder, imageUrl),
+                            animateIfPossible = animateGifs && isAnimatedCollectionFolderImage(folder, imageUrl),
                         )
                     }
                     !folder.coverEmoji.isNullOrBlank() -> {

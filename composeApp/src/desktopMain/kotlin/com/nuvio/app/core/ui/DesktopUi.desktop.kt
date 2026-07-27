@@ -6,6 +6,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
@@ -31,10 +33,14 @@ internal actual val nuvioBottomNavigationExtraVerticalPadding: Dp = 6.dp
 internal actual fun nuvioBottomNavigationBarInsets(): WindowInsets = WindowInsets(0, 0, 0, 0)
 
 @Composable
-actual fun BindPlatformBackNavigation(navController: androidx.navigation.NavHostController) {
-    DisposableEffect(navController) {
+internal actual fun platformPhysicalTopInset(): Dp =
+    WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+
+@Composable
+internal actual fun BindPlatformBackNavigation(navigator: com.nuvio.app.navigation.NuvioNavigator) {
+    DisposableEffect(navigator) {
         DesktopBackDispatcher.fallback = {
-            if (!navController.popBackStack()) Unit
+            if (!navigator.popBackStack()) Unit
         }
         onDispose {
             DesktopBackDispatcher.fallback = null
@@ -75,9 +81,7 @@ actual fun appIconPainter(icon: AppIconResource): Painter =
         }
     )
 
-internal actual fun ImageLoader.Builder.configurePlatformImageLoader(
-    context: PlatformContext,
-): ImageLoader.Builder = this
+internal actual fun ImageLoader.Builder.configurePlatformImageLoader(): ImageLoader.Builder = this
 
 actual fun platformExitApp() {
     exitProcess(0)

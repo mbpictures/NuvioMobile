@@ -42,7 +42,7 @@
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
+	<false/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

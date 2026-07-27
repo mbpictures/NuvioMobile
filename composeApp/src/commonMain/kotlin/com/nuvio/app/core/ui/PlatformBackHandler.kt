@@ -1,7 +1,7 @@
 package com.nuvio.app.core.ui
 
 import androidx.compose.runtime.Composable
-import androidx.navigation.NavHostController
+import com.nuvio.app.navigation.NuvioNavigator
 
 @Composable
 expect fun PlatformBackHandler(
@@ -10,4 +10,4 @@ expect fun PlatformBackHandler(
 )
 
 @Composable
-expect fun BindPlatformBackNavigation(navController: NavHostController)
+internal expect fun BindPlatformBackNavigation(navigator: NuvioNavigator)

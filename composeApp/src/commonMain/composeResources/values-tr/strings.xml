@@ -31,6 +31,13 @@
     <string name="addons_badge_unavailable">Kullanılamıyor</string>
     <string name="addons_configure">Eklentiyi ayarla</string>
     <string name="addons_delete">Eklentiyi sil</string>
+    <string name="addons_appstore_add_description">Kullandığın eklentilerle kitaplığını Nuvio'ya taşı.</string>
+    <string name="addons_appstore_empty_subtitle">Kitaplığını oluşturmaya başlamak için bir eklenti ekle.</string>
+    <string name="addons_appstore_empty_title">Nuvio'yu kendine göre ayarla.</string>
+    <string name="addons_appstore_input_placeholder">Eklenti URL'si</string>
+    <string name="addons_appstore_install_button">Eklenti ekle</string>
+    <string name="store_empty_unavailable_title">Burada henüz bir şey yok</string>
+    <string name="store_empty_unavailable_message">Kullandığın eklentilerin burada gösterecek bir şeyi yok.</string>
     <string name="addons_empty_subtitle">Nuvio'ya katalog, meta veri, yayın veya altyazı yüklemeye başlamak için bir manifest URL'si ekle.</string>
     <string name="addons_empty_title">Henüz eklenti kurulmamış.</string>
     <string name="addons_error_enter_url">Bir eklenti URL'si gir.</string>
@@ -388,6 +395,7 @@
     <string name="compose_settings_page_licenses_attributions">Lisanslar &amp; Teşekkürler</string>
     <string name="compose_settings_page_mdblist_ratings">MDBList puanları</string>
     <string name="compose_settings_page_meta_screen">Detay ekranı</string>
+    <string name="settings_appearance_section_detail_page">DETAY EKRANI</string>
     <string name="compose_settings_page_notifications">Bildirimler</string>
     <string name="compose_settings_page_playback">Oynatma</string>
     <string name="compose_settings_page_plugins">Pluginler</string>
@@ -403,7 +411,9 @@
     <string name="compose_settings_root_check_updates_description">Uygulamanın yeni sürümü var mı kontrol et.</string>
     <string name="compose_settings_root_check_updates_title">Güncellemeleri kontrol et</string>
     <string name="compose_settings_root_content_discovery_description">Eklentileri ve keşif kaynaklarını yönet.</string>
+    <string name="compose_settings_root_content_discovery_description_appstore">Eklentileri yönet ve Nuvio’da nelerin görüneceğini seç.</string>
     <string name="compose_settings_root_downloads_description">İndirdiğin film ve bölümleri yönet.</string>
+    <string name="compose_settings_root_downloads_description_appstore">Bu cihaza kaydettiklerini yönet.</string>
     <string name="compose_settings_root_downloads_title">İndirilenler</string>
     <string name="compose_settings_root_general_section">GENEL</string>
     <string name="compose_settings_root_integrations_description">TMDB ve MDBList servislerini bağla.</string>
@@ -528,8 +538,6 @@
     <string name="settings_homescreen_show_hero_description">Ana sayfanın üstünde öne çıkan bir kaydırmalı alan göster. Aşağıdan en fazla 2 kaynak katalog seç.</string>
     <string name="layout_hide_unreleased">Henüz Yayınlanmamış İçerikleri Gizle</string>
     <string name="layout_hide_unreleased_sub">Henüz yayınlanmamış film ve dizileri gizle.</string>
-    <string name="settings_homescreen_hide_catalog_underline">Katalog Alt Çizgisini Gizle</string>
-    <string name="settings_homescreen_hide_catalog_underline_description">Uygulama genelinde katalog ve koleksiyon başlıklarının altındaki vurgu çizgisini kaldır.</string>
     <string name="settings_homescreen_summary">%1$d / %2$d katalog görünür • %3$d öne çıkan kaynak seçili</string>
     <string name="settings_homescreen_summary_hint">Bir kataloğu yalnızca adını değiştirmek veya sıralamak gerektiğinde aç.</string>
     <string name="settings_homescreen_visible">Görünür</string>
@@ -588,6 +596,7 @@
     <string name="settings_content_discovery_section_home">ANA SAYFA</string>
     <string name="settings_content_discovery_section_sources">KAYNAKLAR</string>
     <string name="settings_content_discovery_addons_description">İçerik kaynaklarını kur, kaldır, yenile ve sırala.</string>
+    <string name="settings_content_discovery_addons_description_appstore">Nuvio ile kullandığın eklentileri ekle ve yönet.</string>
     <string name="settings_content_discovery_plugins_description">JavaScript scraper depoları kur ve sağlayıcıları içeriden test et.</string>
     <string name="settings_content_discovery_homescreen_description">Ana sayfada hangi katalogların hangi sırayla görüneceğini kontrol et.</string>
     <string name="settings_content_discovery_meta_screen_description">Detay bölümlerini kapat ve öne çıkanların altındaki her şeyi yeniden sırala.</string>
@@ -596,7 +605,7 @@
     <string name="settings_integrations_tmdb_description">Detay sayfalarını TMDB görselleri, ekip bilgileri, bölüm meta verileri ve daha fazlasıyla zenginleştir.</string>
     <string name="settings_integrations_mdblist_description">Detay sayfalarına IMDb, Rotten Tomatoes, Metacritic ve diğer dış puanları ekle.</string>
     <string name="settings_integrations_debrid_description">Bağlantı ve kitaplık erişimi için hesapları bağla</string>
-    <string name="settings_debrid_section_title">Bağlı Servisler</string>
+    <string name="settings_debrid_section_title">BAĞLI SERVİSLER</string>
     <string name="settings_debrid_experimental_notice">Bu entegrasyonlar deneyseldir; gelecekte tutulabilir, değiştirilebilir veya tamamen kaldırılabilir.</string>
     <string name="settings_debrid_cloud_library">Bulut kitaplığı</string>
     <string name="settings_debrid_cloud_library_description">Bağlı hesaplarında zaten bulunan dosyaları gözden geçir ve oynat.</string>
@@ -605,7 +614,7 @@
     <string name="settings_debrid_resolve_with">Şununla çöz</string>
     <string name="settings_debrid_resolve_with_description">Oynatılabilir bağlantıları hangi bağlı hesabın işleyeceğini seç.</string>
     <string name="settings_debrid_add_key_first">Önce bir hesap bağla.</string>
-    <string name="settings_debrid_section_providers">Hesaplar</string>
+    <string name="settings_debrid_section_providers">HESAPLAR</string>
     <string name="settings_debrid_provider_description">%1$s hesabını bağla.</string>
     <string name="settings_debrid_provider_device_description">%1$s hesabını tarayıcıda eşleştir.</string>
     <string name="settings_debrid_dialog_title">%1$s API Anahtarı</string>
@@ -625,14 +634,14 @@
     <string name="settings_debrid_device_auth_failed">Giriş başlatılamadı.</string>
     <string name="settings_debrid_device_auth_missing_configuration">Bu giriş yöntemi bu sürümde yapılandırılmamış.</string>
     <string name="settings_debrid_device_auth_expired">Kodun süresi doldu. Tekrar dene.</string>
-    <string name="settings_debrid_section_instant_playback">Bağlantı Hazırlığı</string>
+    <string name="settings_debrid_section_instant_playback">BAĞLANTI HAZIRLIĞI</string>
     <string name="settings_debrid_prepare_instant_playback">Bağlantıları hazırla</string>
     <string name="settings_debrid_prepare_instant_playback_description">Oynatma başlamadan önce oynatılabilir bağlantıları çöz.</string>
     <string name="settings_debrid_prepare_stream_count">Hazırlanacak bağlantı sayısı</string>
     <string name="settings_debrid_prepare_stream_count_warning">Mümkünse daha düşük bir sayı seç. Bağlı servisler, belirli bir sürede çözülebilecek bağlantı sayısını sınırlayabilir. Bir filmi veya bölümü açmak, İzle butonuna basmasan bile limitlerini etkileyebilir, çünkü bağlantılar önceden hazırlanır.</string>
     <string name="settings_debrid_prepare_count_one">1 bağlantı</string>
     <string name="settings_debrid_prepare_count_many">%1$d bağlantı</string>
-    <string name="settings_debrid_section_formatting">Biçimlendirme</string>
+    <string name="settings_debrid_section_formatting">BİÇİMLENDİRME</string>
     <string name="settings_debrid_name_template">Ad şablonu</string>
     <string name="settings_debrid_name_template_description">Sonuç adlarının nasıl görüneceğini belirler.</string>
     <string name="settings_debrid_description_template">Açıklama şablonu</string>

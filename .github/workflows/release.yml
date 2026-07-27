@@ -227,6 +227,9 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      - name: Fetch Nuvio Engine Apple XCFramework
+        uses: ./.github/actions/fetch-nuvio-engine-apple
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
@@ -589,6 +592,9 @@ jobs:
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
+
+      - name: Fetch Nuvio Engine Apple XCFramework
+        uses: ./.github/actions/fetch-nuvio-engine-apple
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew

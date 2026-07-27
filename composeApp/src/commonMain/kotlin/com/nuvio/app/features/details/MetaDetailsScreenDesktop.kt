@@ -308,7 +308,7 @@ internal fun MetaDetailsScreenDesktop(
                     DetailHero(
                         meta = meta,
                         isTablet = true,
-                        scrollOffsetProvider = { detailsScroll.value.toFloat() },
+                        scrollOffset = { detailsScroll.value },
                         onHeightChanged = { },
                     )
                     Row(

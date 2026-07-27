@@ -21,6 +21,7 @@ import com.nuvio.app.features.debrid.DebridSettingsStorage
 import com.nuvio.app.features.downloads.DownloadsLiveStatusPlatform
 import com.nuvio.app.features.downloads.DownloadsPlatformDownloader
 import com.nuvio.app.features.downloads.DownloadsStorage
+import com.nuvio.app.features.library.LibraryDisplaySettingsStorage
 import com.nuvio.app.features.library.LibraryStorage
 import com.nuvio.app.features.details.MetaScreenSettingsStorage
 import com.nuvio.app.features.home.HomeCatalogSettingsStorage
@@ -48,6 +49,7 @@ import com.nuvio.app.features.trakt.TraktLibraryStorage
 import com.nuvio.app.features.trakt.TraktSettingsStorage
 import com.nuvio.app.features.tmdb.TmdbSettingsStorage
 import com.nuvio.app.features.updater.AndroidAppUpdaterPlatform
+import com.nuvio.app.core.ui.CardDepthStyleStorage
 import com.nuvio.app.core.ui.PosterCardStyleStorage
 import com.nuvio.app.features.watched.WatchedStorage
 import com.nuvio.app.features.streams.StreamLinkCacheStorage
@@ -93,6 +95,7 @@ class MainActivity : AppCompatActivity() {
         SearchHistoryStorage.initialize(applicationContext)
         SeasonViewModeStorage.initialize(applicationContext)
         PosterCardStyleStorage.initialize(applicationContext)
+        CardDepthStyleStorage.initialize(applicationContext)
         DebridSettingsStorage.initialize(applicationContext)
         TmdbSettingsStorage.initialize(applicationContext)
         MdbListSettingsStorage.initialize(applicationContext)
@@ -100,6 +103,7 @@ class MainActivity : AppCompatActivity() {
         TraktCommentsStorage.initialize(applicationContext)
         TraktLibraryStorage.initialize(applicationContext)
         TraktSettingsStorage.initialize(applicationContext)
+        LibraryDisplaySettingsStorage.initialize(applicationContext)
         ContinueWatchingPreferencesStorage.initialize(applicationContext)
         ResumePromptStorage.initialize(applicationContext)
         ContinueWatchingEnrichmentStorage.initialize(applicationContext)

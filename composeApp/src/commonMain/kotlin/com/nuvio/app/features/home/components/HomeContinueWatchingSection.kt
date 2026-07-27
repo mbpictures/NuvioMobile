@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,10 +47,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.DisintegratingContainer
+import com.nuvio.app.core.ui.NuvioCardDepthSurface
 import com.nuvio.app.core.ui.NuvioProgressBar
+import com.nuvio.app.core.ui.nuvioCardDepth
 import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvioSecondaryClick
@@ -59,7 +62,6 @@ import com.nuvio.app.core.ui.posterCardClickable
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.cloudLibraryDisplayArtworkUrl
-import com.nuvio.app.features.home.HomeCatalogSettingsRepository
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
 import com.nuvio.app.features.watchprogress.ContinueWatchingSectionStyle
 import com.nuvio.app.features.watchprogress.CurrentDateProvider
@@ -84,13 +86,8 @@ internal fun continueWatchingSectionHeightEstimate(
     style: ContinueWatchingSectionStyle,
     layout: ContinueWatchingLayout,
     basePosterWidthDp: Int,
-    showHeaderAccent: Boolean,
 ): Dp {
-    val headerHeight = NuvioTokens.Space.s40 + if (showHeaderAccent) {
-        NuvioTokens.Space.s6 + NuvioTokens.Space.s4
-    } else {
-        0.dp
-    }
+    val headerHeight = NuvioTokens.Space.s40
     val headerToRowGap = NuvioTokens.Space.s8 + NuvioTokens.Space.s2
     val rowHeight = when (style) {
         ContinueWatchingSectionStyle.Card -> continueWatchingLandscapeCardHeight(basePosterWidthDp)
@@ -104,7 +101,6 @@ internal fun continueWatchingHeroViewportReserveHeight(
     style: ContinueWatchingSectionStyle,
     layout: ContinueWatchingLayout,
     basePosterWidthDp: Int,
-    showHeaderAccent: Boolean,
 ): Dp {
     val bottomNavigationClearance = when (style) {
         ContinueWatchingSectionStyle.Card,
@@ -115,7 +111,6 @@ internal fun continueWatchingHeroViewportReserveHeight(
         style = style,
         layout = layout,
         basePosterWidthDp = basePosterWidthDp,
-        showHeaderAccent = showHeaderAccent,
     ) + bottomNavigationClearance
 }
 
@@ -232,8 +227,10 @@ internal fun HomeContinueWatchingSection(
     useEpisodeThumbnails: Boolean = true,
     blurNextUp: Boolean = false,
     modifier: Modifier = Modifier,
+    title: String? = null,
     sectionPadding: Dp? = null,
     layout: ContinueWatchingLayout? = null,
+    listState: LazyListState = rememberLazyListState(),
     onItemClick: ((ContinueWatchingItem) -> Unit)? = null,
     onItemLongPress: ((ContinueWatchingItem) -> Unit)? = null,
 ) {
@@ -246,8 +243,10 @@ internal fun HomeContinueWatchingSection(
             useEpisodeThumbnails = useEpisodeThumbnails,
             blurNextUp = blurNextUp,
             modifier = modifier.fillMaxWidth(),
+            title = title,
             sectionPadding = sectionPadding,
             layout = layout,
+            listState = listState,
             onItemClick = onItemClick,
             onItemLongPress = onItemLongPress,
         )
@@ -259,8 +258,10 @@ internal fun HomeContinueWatchingSection(
                 useEpisodeThumbnails = useEpisodeThumbnails,
                 blurNextUp = blurNextUp,
                 modifier = Modifier.fillMaxWidth(),
+                title = title,
                 sectionPadding = homeSectionHorizontalPaddingForWidth(maxWidth.value),
                 layout = rememberContinueWatchingLayout(maxWidth.value),
+                listState = listState,
                 onItemClick = onItemClick,
                 onItemLongPress = onItemLongPress,
             )
@@ -275,29 +276,26 @@ private fun HomeContinueWatchingSectionContent(
     useEpisodeThumbnails: Boolean,
     blurNextUp: Boolean,
     modifier: Modifier,
+    title: String?,
     sectionPadding: Dp,
     layout: ContinueWatchingLayout,
+    listState: LazyListState,
     onItemClick: ((ContinueWatchingItem) -> Unit)?,
     onItemLongPress: ((ContinueWatchingItem) -> Unit)?,
 ) {
-    val homeCatalogSettings by remember {
-        HomeCatalogSettingsRepository.snapshot()
-        HomeCatalogSettingsRepository.uiState
-    }.collectAsStateWithLifecycle()
-
     val disintegration = remember { ContinueWatchingDisintegrationHolder() }
     val displayEntries = disintegration.sync(items)
 
     NuvioShelfSection(
-        title = stringResource(Res.string.compose_settings_page_continue_watching),
+        title = title ?: stringResource(Res.string.compose_settings_page_continue_watching),
         entries = displayEntries,
         modifier = modifier,
         headerHorizontalPadding = sectionPadding,
         rowContentPadding = PaddingValues(horizontal = sectionPadding),
         itemSpacing = layout.itemGap,
-        showHeaderAccent = !homeCatalogSettings.hideCatalogUnderline,
         key = { entry -> entry.videoId },
         animatePlacement = true,
+        state = listState,
     ) { entry ->
         val item = entry.item
         val onClick = if (entry.exiting) null else onItemClick?.let { { it(item) } }
@@ -704,7 +702,16 @@ private fun ContinueWatchingCard(
             .aspectRatio(PosterLandscapeAspectRatio)
             .clip(RoundedCornerShape(cardMetrics.cornerRadius))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .posterCardClickable(onClick = onClick, onLongClick = onLongClick),
+            .nuvioCardDepth(
+                shape = RoundedCornerShape(cardMetrics.cornerRadius),
+                surface = NuvioCardDepthSurface.ContinueWatching,
+            )
+            .posterCardClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                zoomImageUrl = imageUrl,
+                zoomCornerRadius = cardMetrics.cornerRadius,
+            ),
     ) {
         if (imageUrl != null) {
             AsyncImage(
@@ -996,6 +1003,7 @@ private fun ContinueWatchingPosterCard(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
 ) {
+    val imageUrl = item.continueWatchingPosterArtworkUrl(useEpisodeThumbnails)
     Column(
         modifier = Modifier.width(layout.posterCardWidth),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1006,9 +1014,17 @@ private fun ContinueWatchingPosterCard(
                 .height(layout.posterCardHeight)
                 .clip(RoundedCornerShape(layout.cardRadius))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .posterCardClickable(onClick = onClick, onLongClick = onLongClick),
+                .nuvioCardDepth(
+                    shape = RoundedCornerShape(layout.cardRadius),
+                    surface = NuvioCardDepthSurface.ContinueWatching,
+                )
+                .posterCardClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    zoomImageUrl = imageUrl,
+                    zoomCornerRadius = layout.cardRadius,
+                ),
         ) {
-            val imageUrl = item.continueWatchingPosterArtworkUrl(useEpisodeThumbnails)
             val shouldBlurArtwork = blurNextUp &&
                 useEpisodeThumbnails &&
                 item.isNextUp &&
