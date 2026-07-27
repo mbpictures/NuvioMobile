@@ -34,6 +34,7 @@ fun snapToAllowedTimeout(value: Int): Int {
 
 data class PlayerSettingsUiState(
     val showLoadingOverlay: Boolean = true,
+    val showParentalGuide: Boolean = true,
     val resizeMode: PlayerResizeMode = PlayerResizeMode.Fit,
     val holdToSpeedEnabled: Boolean = true,
     val holdToSpeedValue: Float = 2f,
@@ -100,6 +101,7 @@ object PlayerSettingsRepository {
 
     private var hasLoaded = false
     private var showLoadingOverlay = true
+    private var showParentalGuide = true
     private var resizeMode = PlayerResizeMode.Fit
     private var holdToSpeedEnabled = true
     private var holdToSpeedValue = 2f
@@ -171,6 +173,7 @@ object PlayerSettingsRepository {
     fun clearLocalState() {
         hasLoaded = false
         showLoadingOverlay = true
+        showParentalGuide = true
         resizeMode = PlayerResizeMode.Fit
         holdToSpeedEnabled = true
         holdToSpeedValue = 2f
@@ -235,6 +238,7 @@ object PlayerSettingsRepository {
     private fun loadFromDisk() {
         hasLoaded = true
         showLoadingOverlay = PlayerSettingsStorage.loadShowLoadingOverlay() ?: true
+        showParentalGuide = PlayerSettingsStorage.loadShowParentalGuide() ?: true
         resizeMode = PlayerSettingsStorage.loadResizeMode()
             ?.let { runCatching { PlayerResizeMode.valueOf(it) }.getOrNull() }
             ?: PlayerResizeMode.Fit
@@ -375,6 +379,14 @@ object PlayerSettingsRepository {
         showLoadingOverlay = enabled
         publish()
         PlayerSettingsStorage.saveShowLoadingOverlay(enabled)
+    }
+
+    fun setShowParentalGuide(enabled: Boolean) {
+        ensureLoaded()
+        if (showParentalGuide == enabled) return
+        showParentalGuide = enabled
+        publish()
+        PlayerSettingsStorage.saveShowParentalGuide(enabled)
     }
 
     fun setResizeMode(mode: PlayerResizeMode) {
@@ -916,6 +928,7 @@ object PlayerSettingsRepository {
     private fun publish() {
         _uiState.value = PlayerSettingsUiState(
             showLoadingOverlay = showLoadingOverlay,
+            showParentalGuide = showParentalGuide,
             resizeMode = resizeMode,
             holdToSpeedEnabled = holdToSpeedEnabled,
             holdToSpeedValue = holdToSpeedValue,

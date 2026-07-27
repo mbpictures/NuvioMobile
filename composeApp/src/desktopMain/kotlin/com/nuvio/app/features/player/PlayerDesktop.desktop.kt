@@ -27,6 +27,7 @@ internal actual object DeviceLanguagePreferences {
 internal actual object PlayerSettingsStorage {
     private const val preferencesName = "nuvio_player_settings"
     private const val showLoadingOverlayKey = "show_loading_overlay"
+    private const val showParentalGuideKey = "show_parental_guide"
     private const val touchGesturesEnabledKey = "touch_gestures_enabled"
     private const val resizeModeKey = "resize_mode"
     private const val holdToSpeedEnabledKey = "hold_to_speed_enabled"
@@ -96,6 +97,7 @@ internal actual object PlayerSettingsStorage {
     private const val iosAudioOutputModeKey = "ios_audio_output_mode"
     private val syncKeys = listOf(
         showLoadingOverlayKey,
+        showParentalGuideKey,
         touchGesturesEnabledKey,
         resizeModeKey,
         holdToSpeedEnabledKey,
@@ -161,6 +163,12 @@ internal actual object PlayerSettingsStorage {
     )
 
     actual fun loadShowLoadingOverlay(): Boolean? = loadBoolean(showLoadingOverlayKey)
+
+    actual fun loadShowParentalGuide(): Boolean? = loadBoolean(showParentalGuideKey)
+
+    actual fun saveShowParentalGuide(enabled: Boolean) {
+        saveBoolean(showParentalGuideKey, enabled)
+    }
 
     actual fun saveShowLoadingOverlay(enabled: Boolean) {
         saveBoolean(showLoadingOverlayKey, enabled)
@@ -530,6 +538,7 @@ internal actual object PlayerSettingsStorage {
 
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
         loadShowLoadingOverlay()?.let { put(showLoadingOverlayKey, encodeSyncBoolean(it)) }
+        loadShowParentalGuide()?.let { put(showParentalGuideKey, encodeSyncBoolean(it)) }
         loadTouchGesturesEnabled()?.let { put(touchGesturesEnabledKey, encodeSyncBoolean(it)) }
         loadResizeMode()?.let { put(resizeModeKey, encodeSyncString(it)) }
         loadHoldToSpeedEnabled()?.let { put(holdToSpeedEnabledKey, encodeSyncBoolean(it)) }
@@ -579,6 +588,7 @@ internal actual object PlayerSettingsStorage {
         syncKeys.forEach { DesktopPreferences.remove(preferencesName, ProfileScopedKey.of(it)) }
 
         payload.decodeSyncBoolean(showLoadingOverlayKey)?.let(::saveShowLoadingOverlay)
+        payload.decodeSyncBoolean(showParentalGuideKey)?.let(::saveShowParentalGuide)
         payload.decodeSyncBoolean(touchGesturesEnabledKey)?.let(::saveTouchGesturesEnabled)
         payload.decodeSyncString(resizeModeKey)?.let(::saveResizeMode)
         payload.decodeSyncBoolean(holdToSpeedEnabledKey)?.let(::saveHoldToSpeedEnabled)
@@ -721,8 +731,11 @@ actual fun EnterImmersivePlayerMode(keepScreenAwake: Boolean) = Unit
 @Composable
 actual fun ManagePlayerPictureInPicture(
     isPlaying: Boolean,
-    playerSize: IntSize,
+    videoSize: IntSize,
 ): PlayerPictureInPictureController = DisabledPlayerPictureInPictureController
+
+@Composable
+actual fun rememberIsInPictureInPicture(): Boolean = false
 
 private object DisabledPlayerPictureInPictureController : PlayerPictureInPictureController {
     override val isSupported: Boolean = false

@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.LocalWindowChromeImmersiveRequest
 import com.nuvio.app.features.addons.AddonRepository
@@ -149,7 +150,10 @@ internal fun PlayerScreenContent(args: PlayerScreenArgs) {
         EnterImmersivePlayerMode(keepScreenAwake = keepScreenAwake)
         runtime.pictureInPictureController = ManagePlayerPictureInPicture(
             isPlaying = runtime.playbackSnapshot.isPlaying,
-            playerSize = runtime.layoutSize,
+            videoSize = IntSize(
+                runtime.playbackSnapshot.videoWidth,
+                runtime.playbackSnapshot.videoHeight,
+            ),
         )
         runtime.fullscreenController = LocalPlayerFullscreenController.current
 

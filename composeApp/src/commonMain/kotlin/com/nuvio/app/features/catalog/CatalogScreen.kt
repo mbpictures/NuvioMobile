@@ -7,12 +7,15 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -48,7 +51,9 @@ import coil3.compose.AsyncImage
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.ui.NuvioAnimatedBookmarkedBadge
 import com.nuvio.app.core.ui.NuvioBackButton
+import com.nuvio.app.core.ui.NuvioCardDepthSurface
 import com.nuvio.app.core.ui.NuvioPosterWatchedOverlay
+import com.nuvio.app.core.ui.nuvioCardDepth
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.posterCardClickable
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
@@ -60,6 +65,7 @@ import com.nuvio.app.features.home.stableKey
 import com.nuvio.app.features.library.LibraryRepository
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watching.application.WatchingState
+import com.nuvio.app.navigation.LocalUseNativeNavigation
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -251,6 +257,16 @@ private fun CatalogHeader(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (LocalUseNativeNavigation.current) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .height(44.dp),
+        )
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -307,7 +323,16 @@ private fun CatalogPosterTile(
                 .aspectRatio(item.posterShape.catalogAspectRatio())
                 .clip(RoundedCornerShape(cornerRadiusDp.dp))
                 .background(MaterialTheme.colorScheme.surface)
-                .posterCardClickable(onClick = onClick, onLongClick = onLongClick),
+                .nuvioCardDepth(
+                    shape = RoundedCornerShape(cornerRadiusDp.dp),
+                    surface = NuvioCardDepthSurface.Posters,
+                )
+                .posterCardClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    zoomImageUrl = item.poster,
+                    zoomCornerRadius = cornerRadiusDp.dp,
+                ),
         ) {
             if (item.poster != null) {
                 AsyncImage(

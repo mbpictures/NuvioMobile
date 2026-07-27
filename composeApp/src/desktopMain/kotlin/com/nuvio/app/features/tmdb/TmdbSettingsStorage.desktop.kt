@@ -26,6 +26,7 @@ internal actual object TmdbSettingsStorage {
     private const val useSeasonPostersKey = "tmdb_use_season_posters"
     private const val useMoreLikeThisKey = "tmdb_use_more_like_this"
     private const val useCollectionsKey = "tmdb_use_collections"
+    private const val useReleaseDatesKey = "tmdb_use_release_dates"
     private val syncKeys = listOf(
         enabledKey,
         apiKeyKey,
@@ -41,6 +42,7 @@ internal actual object TmdbSettingsStorage {
         useSeasonPostersKey,
         useMoreLikeThisKey,
         useCollectionsKey,
+        useReleaseDatesKey,
     )
 
     actual fun loadEnabled(): Boolean? = loadBoolean(enabledKey)
@@ -127,6 +129,12 @@ internal actual object TmdbSettingsStorage {
         saveBoolean(useCollectionsKey, enabled)
     }
 
+    actual fun loadUseReleaseDates(): Boolean? = loadBoolean(useReleaseDatesKey)
+
+    actual fun saveUseReleaseDates(enabled: Boolean) {
+        saveBoolean(useReleaseDatesKey, enabled)
+    }
+
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
         loadEnabled()?.let { put(enabledKey, encodeSyncBoolean(it)) }
         loadApiKey()?.let { put(apiKeyKey, encodeSyncString(it)) }
@@ -142,6 +150,7 @@ internal actual object TmdbSettingsStorage {
         loadUseSeasonPosters()?.let { put(useSeasonPostersKey, encodeSyncBoolean(it)) }
         loadUseMoreLikeThis()?.let { put(useMoreLikeThisKey, encodeSyncBoolean(it)) }
         loadUseCollections()?.let { put(useCollectionsKey, encodeSyncBoolean(it)) }
+        loadUseReleaseDates()?.let { put(useReleaseDatesKey, encodeSyncBoolean(it)) }
     }
 
     actual fun replaceFromSyncPayload(payload: JsonObject) {
@@ -161,6 +170,7 @@ internal actual object TmdbSettingsStorage {
         payload.decodeSyncBoolean(useSeasonPostersKey)?.let(::saveUseSeasonPosters)
         payload.decodeSyncBoolean(useMoreLikeThisKey)?.let(::saveUseMoreLikeThis)
         payload.decodeSyncBoolean(useCollectionsKey)?.let(::saveUseCollections)
+        payload.decodeSyncBoolean(useReleaseDatesKey)?.let(::saveUseReleaseDates)
     }
 
     private fun scopedKey(baseKey: String): String = ProfileScopedKey.of(baseKey)

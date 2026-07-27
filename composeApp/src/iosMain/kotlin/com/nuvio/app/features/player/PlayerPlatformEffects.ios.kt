@@ -92,7 +92,7 @@ actual fun EnterImmersivePlayerMode(keepScreenAwake: Boolean) {
 @Composable
 actual fun ManagePlayerPictureInPicture(
     isPlaying: Boolean,
-    playerSize: IntSize,
+    videoSize: IntSize,
 ): PlayerPictureInPictureController {
     var active by remember { mutableStateOf(IosPictureInPictureSession.isActive.value) }
 
@@ -115,6 +115,17 @@ actual fun ManagePlayerPictureInPicture(
             }
         }
     }
+}
+
+@Composable
+actual fun rememberIsInPictureInPicture(): Boolean {
+    var active by remember { mutableStateOf(IosPictureInPictureSession.isActive.value) }
+
+    LaunchedEffect(Unit) {
+        IosPictureInPictureSession.isActive.collect { value -> active = value }
+    }
+
+    return active
 }
 
 @Composable

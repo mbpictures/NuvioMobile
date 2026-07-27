@@ -19,13 +19,19 @@ actual fun PlatformPlayerSurface(
     useYoutubeChunkedPlayback: Boolean,
     modifier: Modifier,
     playWhenReady: Boolean,
+    initialPositionMs: Long?,
+    initialPositionRequestKey: String?,
     resizeMode: PlayerResizeMode,
     useNativeController: Boolean,
+    onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
 ) {
     val backend = remember { desktopPlaybackBackend() }
+    // The desktop backends have no start-position parameter, so the initial position is applied
+    // by seeking once the controller for this request key becomes available.
+    val handledPositionKeys = remember { mutableSetOf<String>() }
     backend.PlayerSurface(
         sourceUrl = sourceUrl,
         sourceAudioUrl = sourceAudioUrl,
@@ -36,7 +42,19 @@ actual fun PlatformPlayerSurface(
         playWhenReady = playWhenReady,
         resizeMode = resizeMode,
         useNativeController = useNativeController,
-        onControllerReady = onControllerReady,
+        onControllerReady = { controller ->
+            val startPositionMs = initialPositionMs?.takeIf { it > 0L }
+            val key = initialPositionRequestKey
+            if (key != null && handledPositionKeys.add(key)) {
+                if (startPositionMs != null) {
+                    controller.seekTo(startPositionMs)
+                }
+                onInitialPositionHandled(key, startPositionMs != null)
+            } else if (key == null && startPositionMs != null) {
+                controller.seekTo(startPositionMs)
+            }
+            onControllerReady(controller)
+        },
         onSnapshot = onSnapshot,
         onError = onError,
     )

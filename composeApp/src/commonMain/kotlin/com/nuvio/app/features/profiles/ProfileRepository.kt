@@ -13,8 +13,10 @@ import com.nuvio.app.features.downloads.DownloadsRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
 import com.nuvio.app.features.home.HomeRepository
+import com.nuvio.app.core.ui.CardDepthStyleRepository
 import com.nuvio.app.core.ui.PosterCardStyleRepository
 import com.nuvio.app.features.library.LibraryRepository
+import com.nuvio.app.features.library.LibraryDisplaySettingsRepository
 import com.nuvio.app.features.mdblist.MdbListSettingsRepository
 import com.nuvio.app.features.notifications.EpisodeReleaseNotificationsRepository
 import com.nuvio.app.features.p2p.P2pSettingsRepository
@@ -153,8 +155,9 @@ object ProfileRepository {
         persist()
         WatchedRepository.onProfileChanged(profileIndex)
         TraktSettingsRepository.onProfileChanged()
-        TraktAuthRepository.onProfileChanged()
+        TraktAuthRepository.onProfileChanged(profileIndex)
         LibraryRepository.onProfileChanged(profileIndex)
+        LibraryDisplaySettingsRepository.onProfileChanged()
         WatchProgressRepository.onProfileChanged(profileIndex)
         AddonRepository.onProfileChanged(profileIndex)
         if (com.nuvio.app.core.build.AppFeaturePolicy.pluginsEnabled) {
@@ -162,6 +165,7 @@ object ProfileRepository {
         }
         ThemeSettingsRepository.onProfileChanged()
         PosterCardStyleRepository.onProfileChanged()
+        CardDepthStyleRepository.onProfileChanged()
         PlayerSettingsRepository.onProfileChanged()
         StreamBadgeSettingsRepository.onProfileChanged()
         P2pSettingsRepository.onProfileChanged()

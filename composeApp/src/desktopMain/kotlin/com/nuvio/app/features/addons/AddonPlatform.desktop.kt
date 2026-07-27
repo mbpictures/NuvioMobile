@@ -174,11 +174,13 @@ actual suspend fun httpRequestRaw(
     headers: Map<String, String>,
     body: String,
     followRedirects: Boolean,
+    maxResponseBodyBytes: Int,
 ): RawHttpResponse {
     val response = executeRequest(method, url, headers, body, followRedirects)
     val payload = response.body()
-    val limitedPayload = if (payload.length > maxRawResponseBodyChars) {
-        payload.take(maxRawResponseBodyChars) + truncationSuffix
+    val maxChars = minOf(maxRawResponseBodyChars, maxResponseBodyBytes.coerceAtLeast(0))
+    val limitedPayload = if (payload.length > maxChars) {
+        payload.take(maxChars) + truncationSuffix
     } else {
         payload
     }

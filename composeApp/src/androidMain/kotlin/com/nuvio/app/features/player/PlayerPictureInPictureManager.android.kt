@@ -9,14 +9,19 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Icon
 import android.os.Build
+import kotlin.math.roundToInt
+import kotlinx.coroutines.runBlocking
 import android.os.Handler
 import android.os.Looper
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.Lifecycle
+import com.nuvio.app.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import nuvio.composeapp.generated.resources.*
+import org.jetbrains.compose.resources.getString
 
 internal interface PlayerPipPlaybackActions {
     fun togglePlayback()
@@ -28,27 +33,29 @@ internal object PlayerPictureInPictureManager {
     private data class SessionState(
         val isActive: Boolean = false,
         val isPlaying: Boolean = false,
-        val playerSize: IntSize = IntSize.Zero,
+        val videoSize: IntSize = IntSize.Zero,
     )
 
     private var sessionState = SessionState()
+    private var lastAppliedSessionState: SessionState? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val pipState = MutableStateFlow(false)
     val isInPictureInPictureMode: StateFlow<Boolean> = pipState
     private var pendingPictureInPictureExitCheck: Runnable? = null
     private var pausePlaybackCallback: (() -> Unit)? = null
     private var playbackActions: PlayerPipPlaybackActions? = null
+    private var togglePlaybackCallback: (() -> Unit)? = null
 
     fun updateSession(
         activity: Activity,
         isActive: Boolean,
         isPlaying: Boolean,
-        playerSize: IntSize,
+        videoSize: IntSize,
     ) {
         sessionState = SessionState(
             isActive = isActive,
             isPlaying = isPlaying,
-            playerSize = playerSize,
+            videoSize = videoSize,
         )
         applyPictureInPictureParams(activity)
     }
@@ -71,12 +78,27 @@ internal object PlayerPictureInPictureManager {
         playbackActions = actions
     }
 
+    /**
+     * Fallback play/pause hook for engines that do not publish full [PlayerPipPlaybackActions]
+     * (the libmpv surface). The skip actions are no-ops for those engines.
+     */
+    fun registerTogglePlaybackCallback(callback: (() -> Unit)?) {
+        togglePlaybackCallback = callback
+    }
+
     fun dispatchSkipBack() {
         mainHandler.post { playbackActions?.skipBack() }
     }
 
     fun dispatchTogglePlayback() {
-        mainHandler.post { playbackActions?.togglePlayback() }
+        mainHandler.post {
+            val actions = playbackActions
+            if (actions != null) {
+                actions.togglePlayback()
+            } else {
+                togglePlaybackCallback?.invoke()
+            }
+        }
     }
 
     fun dispatchSkipForward() {
@@ -127,6 +149,8 @@ internal object PlayerPictureInPictureManager {
 
     private fun applyPictureInPictureParams(activity: Activity) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (sessionState == lastAppliedSessionState) return
+        lastAppliedSessionState = sessionState
         activity.setPictureInPictureParams(buildParams(activity))
     }
 
@@ -140,7 +164,7 @@ internal object PlayerPictureInPictureManager {
 
     private fun buildParams(activity: Activity): PictureInPictureParams {
         val builder = PictureInPictureParams.Builder()
-        buildAspectRatio(sessionState.playerSize)?.let(builder::setAspectRatio)
+        buildAspectRatio(sessionState.videoSize)?.let(builder::setAspectRatio)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             builder.setActions(buildRemoteActions(activity))
         }
@@ -158,28 +182,29 @@ internal object PlayerPictureInPictureManager {
             activity = activity,
             requestCode = pendingRequestSkipBack,
             action = PlayerPipActionsReceiver.actionSkipBack,
-            icon = android.R.drawable.ic_media_rew,
-            title = "Rewind 10s",
+            icon = Icon.createWithResource(activity, android.R.drawable.ic_media_rew),
+            title = pipSkipBackLabel,
         )
-        val toggleIcon = if (sessionState.isPlaying) {
-            android.R.drawable.ic_media_pause
-        } else {
-            android.R.drawable.ic_media_play
-        }
-        val toggleTitle = if (sessionState.isPlaying) "Pause" else "Play"
+        val isPlaying = sessionState.isPlaying
+        val toggleIcon = Icon
+            .createWithResource(
+                activity,
+                if (isPlaying) R.drawable.ic_player_pause else R.drawable.ic_player_play,
+            )
+            .apply { setTint(android.graphics.Color.WHITE) }
         val toggle = buildRemoteAction(
             activity = activity,
             requestCode = pendingRequestToggle,
             action = PlayerPipActionsReceiver.actionTogglePlayback,
             icon = toggleIcon,
-            title = toggleTitle,
+            title = if (isPlaying) pipPauseLabel else pipPlayLabel,
         )
         val skipForward = buildRemoteAction(
             activity = activity,
             requestCode = pendingRequestSkipForward,
             action = PlayerPipActionsReceiver.actionSkipForward,
-            icon = android.R.drawable.ic_media_ff,
-            title = "Forward 10s",
+            icon = Icon.createWithResource(activity, android.R.drawable.ic_media_ff),
+            title = pipSkipForwardLabel,
         )
         return listOf(skipBack, toggle, skipForward)
     }
@@ -188,7 +213,7 @@ internal object PlayerPictureInPictureManager {
         activity: Activity,
         requestCode: Int,
         action: String,
-        icon: Int,
+        icon: Icon,
         title: String,
     ): RemoteAction {
         val intent = Intent(action).apply {
@@ -202,23 +227,25 @@ internal object PlayerPictureInPictureManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return RemoteAction(
-            Icon.createWithResource(activity, icon),
+            icon,
             title,
             title,
             pendingIntent,
         )
     }
 
-    private fun buildAspectRatio(playerSize: IntSize): Rational? {
-        if (playerSize.width <= 0 || playerSize.height <= 0) return null
+    private fun buildAspectRatio(videoSize: IntSize): Rational? {
+        if (videoSize.width <= 0 || videoSize.height <= 0) return null
 
-        val width = playerSize.width.coerceAtLeast(1)
-        val height = playerSize.height.coerceAtLeast(1)
+        val width = videoSize.width.coerceAtLeast(1)
+        val height = videoSize.height.coerceAtLeast(1)
         val ratio = width.toDouble() / height.toDouble()
 
         return when {
-            ratio > MaxPictureInPictureAspectRatio -> Rational(239, 100)
-            ratio < MinPictureInPictureAspectRatio -> Rational(100, 239)
+            ratio > MaxPictureInPictureAspectRatio ->
+                Rational((MaxPictureInPictureAspectRatio * 100).roundToInt(), 100)
+            ratio < MinPictureInPictureAspectRatio ->
+                Rational(100, (MaxPictureInPictureAspectRatio * 100).roundToInt())
             else -> Rational(width, height)
         }
     }
@@ -226,6 +253,15 @@ internal object PlayerPictureInPictureManager {
     private fun clearPendingPictureInPictureExitCheck() {
         pendingPictureInPictureExitCheck?.let(mainHandler::removeCallbacks)
         pendingPictureInPictureExitCheck = null
+    }
+
+    private val pipPlayLabel: String by lazy { runBlocking { getString(Res.string.action_play) } }
+    private val pipPauseLabel: String by lazy { runBlocking { getString(Res.string.compose_action_pause) } }
+    private val pipSkipBackLabel: String by lazy {
+        runBlocking { getString(Res.string.compose_player_seek_back_10) }
+    }
+    private val pipSkipForwardLabel: String by lazy {
+        runBlocking { getString(Res.string.compose_player_seek_forward_10) }
     }
 }
 

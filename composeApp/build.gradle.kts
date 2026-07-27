@@ -227,6 +227,7 @@ val iosDistributionSourceDir = if (iosDistribution == "full") {
     "src/iosAppStore/kotlin"
 }
 val iosFrameworkBundleId = "com.nuvio.media.fork"
+val nuvioEngineAppleFramework = rootProject.file("../nuvio-engine/platform/apple/NuvioEngine.xcframework")
 val fullCommonSourceDir = project.file("src/fullCommonMain/kotlin")
 val generatedRuntimeConfigDir = layout.buildDirectory.dir("generated/runtime-config/kotlin")
 val requestedGradleTasks = gradle.startParameter.taskNames.map { taskName ->
@@ -320,6 +321,7 @@ kotlin {
         }
         minSdk = libs.versions.android.minSdk.get().toInt()
         androidResources.enable = true
+        withHostTest {}
 
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_11)
@@ -338,11 +340,27 @@ kotlin {
     )
 
     iosTargets.forEach { iosTarget ->
+        val nuvioEngineSlice = if (iosTarget.name == "iosArm64") {
+            "ios-arm64"
+        } else {
+            "ios-arm64_x86_64-simulator"
+        }
+        val nuvioEngineSliceDirectory = nuvioEngineAppleFramework.resolve(nuvioEngineSlice)
         iosTarget.compilations.getByName("main") {
             cinterops {
                 create("commoncrypto") {
                     defFile(project.file("src/nativeInterop/cinterop/commoncrypto.def"))
                     compilerOpts("-I${project.projectDir}/src/nativeInterop/cinterop")
+                }
+                if (iosDistribution == "full") {
+                    check(nuvioEngineSliceDirectory.resolve("libCNuvioEngine.a").isFile) {
+                        "Build the local Nuvio Engine Apple XCFramework before compiling iOS Full."
+                    }
+                    create("nuvioengine") {
+                        defFile(project.file("src/nativeInterop/cinterop/nuvioengine.def"))
+                        compilerOpts("-I${nuvioEngineSliceDirectory.resolve("Headers").absolutePath}")
+                        extraOpts("-libraryPath", nuvioEngineSliceDirectory.absolutePath)
+                    }
                 }
             }
 
@@ -363,6 +381,14 @@ kotlin {
             baseName = "ComposeApp"
             isStatic = true
             freeCompilerArgs += listOf("-Xbinary=bundleId=$iosFrameworkBundleId")
+            if (iosDistribution == "full") {
+                linkerOpts(
+                    "-lc++",
+                    "-framework", "Security",
+                    "-framework", "SystemConfiguration",
+                    "-framework", "CoreFoundation",
+                )
+            }
         }
     }
     
@@ -414,6 +440,7 @@ kotlin {
                 implementation(libs.mpv.android.lib)
                 implementation(libs.play.services.cast.framework)
                 implementation(libs.androidx.mediarouter)
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
                 implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("lib-*.aar"))))
                 if (androidDistribution == "full") {
                     implementation(files("libs/quickjs-kt-android-1.0.5-nuvio.aar"))
@@ -445,7 +472,7 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.atomicfu)
             implementation(libs.kmpalette.core)
-            implementation(libs.androidx.navigation.compose)
+            implementation(libs.androidx.navigation3.ui)
             implementation(libs.kermit)
             implementation(libs.supabase.postgrest)
             implementation(libs.supabase.auth)

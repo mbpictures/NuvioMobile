@@ -174,6 +174,7 @@ internal fun PlayerScreenRuntime.emitStopScrobbleForCurrentProgress() {
 }
 
 internal fun PlayerScreenRuntime.tryShowParentalGuide() {
+    if (!playerSettingsUiState.showParentalGuide) return
     if (!parentalGuideHasShown && parentalWarnings.isNotEmpty() && !playbackStartedForParentalGuide) {
         playbackStartedForParentalGuide = true
         controlsVisible = true

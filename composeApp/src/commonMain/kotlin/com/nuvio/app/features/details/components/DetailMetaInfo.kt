@@ -37,9 +37,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.core.ui.nuvioHorizontalScrollBleed
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaExternalRating
 import com.nuvio.app.features.details.formatRuntimeForDisplay
@@ -48,6 +50,7 @@ import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_AUDIENCE
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_IMDB
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_LETTERBOXD
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_METACRITIC
+import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_MAL
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_TMDB
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_TOMATOES
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_TRAKT
@@ -71,6 +74,7 @@ import kotlin.math.roundToInt
 fun DetailMetaInfo(
     meta: MetaDetails,
     modifier: Modifier = Modifier,
+    horizontalScrollPadding: Dp = 0.dp,
 ) {
     Column(
         modifier = modifier
@@ -142,6 +146,7 @@ fun DetailMetaInfo(
         ) {
             DetailRatingsRow(
                 ratings = meta.externalRatings,
+                horizontalScrollPadding = horizontalScrollPadding,
             )
         }
 
@@ -199,6 +204,7 @@ fun DetailMetaInfo(
 @Composable
 private fun DetailRatingsRow(
     ratings: List<MetaExternalRating>,
+    horizontalScrollPadding: Dp,
 ) {
     val orderedRatings = remember(ratings) {
         val bySource = ratings.associateBy { it.source }
@@ -211,8 +217,10 @@ private fun DetailRatingsRow(
 
     Row(
         modifier = Modifier
+            .nuvioHorizontalScrollBleed(horizontalScrollPadding)
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = horizontalScrollPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -352,22 +360,6 @@ private val ratingVisuals = listOf(
         format = ::formatWhole,
     ),
     RatingVisuals(
-        source = PROVIDER_TOMATOES,
-        displayName = "Rotten Tomatoes",
-        logo = Res.drawable.rating_rotten_tomatoes,
-        logoWidth = 16.dp,
-        valueColor = Color(0xFFFA320A),
-        format = ::formatPercent,
-    ),
-    RatingVisuals(
-        source = PROVIDER_METACRITIC,
-        displayName = "Metacritic",
-        logo = Res.drawable.rating_metacritic,
-        logoWidth = 16.dp,
-        valueColor = Color(0xFFFFCC33),
-        format = ::formatWhole,
-    ),
-    RatingVisuals(
         source = PROVIDER_TRAKT,
         displayName = "Trakt",
         logo = Res.drawable.rating_trakt,
@@ -384,12 +376,36 @@ private val ratingVisuals = listOf(
         format = ::formatOneDecimal,
     ),
     RatingVisuals(
+        source = PROVIDER_MAL,
+        displayName = "MyAnimeList",
+        logo = Res.drawable.rating_mal,
+        logoWidth = 16.dp,
+        valueColor = Color(0xFF2E51A2),
+        format = ::formatOneDecimal,
+    ),
+    RatingVisuals(
+        source = PROVIDER_TOMATOES,
+        displayName = "Rotten Tomatoes",
+        logo = Res.drawable.rating_rotten_tomatoes,
+        logoWidth = 16.dp,
+        valueColor = Color(0xFFFA320A),
+        format = ::formatPercent,
+    ),
+    RatingVisuals(
         source = PROVIDER_AUDIENCE,
         displayName = runBlocking { getString(Res.string.rating_audience_score) },
         logo = Res.drawable.rating_audience_score,
         logoWidth = 16.dp,
         valueColor = Color(0xFFFA320A),
         format = ::formatPercent,
+    ),
+    RatingVisuals(
+        source = PROVIDER_METACRITIC,
+        displayName = "Metacritic",
+        logo = Res.drawable.rating_metacritic,
+        logoWidth = 16.dp,
+        valueColor = Color(0xFFFFCC33),
+        format = ::formatWhole,
     ),
 )
 

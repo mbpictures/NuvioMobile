@@ -30,8 +30,11 @@ expect fun EnterImmersivePlayerMode(keepScreenAwake: Boolean)
 @Composable
 expect fun ManagePlayerPictureInPicture(
     isPlaying: Boolean,
-    playerSize: IntSize,
+    videoSize: IntSize,
 ): PlayerPictureInPictureController
+
+@Composable
+expect fun rememberIsInPictureInPicture(): Boolean
 
 @Composable
 expect fun rememberPlayerGestureController(): PlayerGestureController?

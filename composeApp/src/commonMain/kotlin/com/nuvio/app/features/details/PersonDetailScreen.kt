@@ -74,6 +74,7 @@ import com.nuvio.app.features.watchprogress.CurrentDateProvider
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
+import com.nuvio.app.navigation.LocalUseNativeNavigation
 
 private sealed interface PersonDetailUiState {
     data object Loading : PersonDetailUiState
@@ -148,18 +149,20 @@ fun PersonDetailScreen(
             }
 
         // Back button overlaid on top
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .nuvioStatusBarsTopPadding()
-                .padding(start = 4.dp, top = 4.dp)
-                .align(Alignment.TopStart),
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = stringResource(Res.string.action_back),
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
+        if (!LocalUseNativeNavigation.current) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .nuvioStatusBarsTopPadding()
+                    .padding(start = 4.dp, top = 4.dp)
+                    .align(Alignment.TopStart),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = stringResource(Res.string.action_back),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
     }
 }

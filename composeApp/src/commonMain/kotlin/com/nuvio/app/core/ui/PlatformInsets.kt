@@ -17,7 +17,14 @@ internal expect val nuvioBottomNavigationExtraVerticalPadding: Dp
 @Composable
 internal expect fun nuvioBottomNavigationBarInsets(): WindowInsets
 
+/** Physical display-safe top inset, excluding any enclosing native toolbar. */
+@Composable
+internal expect fun platformPhysicalTopInset(): Dp
+
 internal val LocalNuvioBottomNavigationOverlayPadding = staticCompositionLocalOf { 0.dp }
+
+/** CompositionLocal providing the shared [NuvioNavBarScrollState] so child screens can attach the nestedScrollConnection. */
+val LocalNuvioNavBarScrollState = staticCompositionLocalOf<NuvioNavBarScrollState?> { null }
 
 /**
  * Extra top inset claimed by a custom window chrome that overlays the app — currently the
