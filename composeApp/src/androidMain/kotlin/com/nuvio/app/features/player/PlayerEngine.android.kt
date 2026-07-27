@@ -76,8 +76,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlin.math.abs
 
 private const val TAG = "NuvioPlayer"
+
+/** Two errors closer together than this count as the same broken offset, not fresh progress. */
+private const val MidStreamRecoveryProgressThresholdMs = 1_000L
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -254,6 +258,11 @@ private fun ExoPlayerSurface(
 
     var resolvedMediaItem by remember(playerSourceKey) { mutableStateOf(initialMediaItem) }
     var probeAttempted by remember(playerSourceKey) { mutableStateOf(false) }
+    // One in-place recovery per playing stretch; reset whenever playback reaches READY again.
+    var midStreamRecoveryAttempted by remember(playerSourceKey) { mutableStateOf(false) }
+    // Where the last in-place recovery happened, so a region that keeps failing surfaces the error
+    // instead of looping between prepare() and the same broken offset.
+    var lastMidStreamRecoveryPositionMs by remember(playerSourceKey) { mutableStateOf<Long?>(null) }
 
     val extractorsFactory = remember {
         DefaultExtractorsFactory()
@@ -466,9 +475,42 @@ private fun ExoPlayerSurface(
                 val isSourceError = error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW ||
                         error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
                         error.cause?.toString()?.contains("UnrecognizedInputFormatException") == true
+                val errorPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
+
+                val failingAgainAtSameOffset = lastMidStreamRecoveryPositionMs?.let { previous ->
+                    abs(errorPositionMs - previous) < MidStreamRecoveryProgressThresholdMs
+                } == true
+
+                // A source error raised after playback has already progressed is a mid-stream
+                // failure — a torn range response, or a zero-filled gap in an incomplete usenet
+                // release that the extractor cannot parse. The container type is already known, so
+                // re-sniffing the MIME below would be pointless, and rebuilding the media item
+                // there resets playback to the start of the file. Re-prepare the current item
+                // instead: ExoPlayer re-requests from the position it stopped at.
+                if (
+                    isSourceError &&
+                    errorPositionMs > 0L &&
+                    !midStreamRecoveryAttempted &&
+                    !failingAgainAtSameOffset
+                ) {
+                    Log.w(
+                        TAG,
+                        "Mid-stream source error at ${errorPositionMs}ms (${error.errorCodeName}); " +
+                            "re-preparing in place",
+                    )
+                    midStreamRecoveryAttempted = true
+                    lastMidStreamRecoveryPositionMs = errorPositionMs
+                    fallbackStartPositionMs = errorPositionMs
+                    latestOnError.value(null)
+                    exoPlayer.prepare()
+                    return
+                }
 
                 if (isSourceError && !probeAttempted) {
                     probeAttempted = true
+                    // Rebuilding the media item below re-seeds playback, so carry the current
+                    // position over instead of silently restarting from the beginning.
+                    fallbackStartPositionMs = errorPositionMs.takeIf { it > 0L }
                     coroutineScope.launch {
                         val probedMime = withContext(Dispatchers.IO) {
                             probeMimeType(sourceUrl, sanitizedSourceHeaders)
@@ -517,6 +559,7 @@ private fun ExoPlayerSurface(
                 if (playbackState == Player.STATE_READY) {
                     fallbackStartPositionMs = null
                     decoderRecoveryInProgress = false
+                    midStreamRecoveryAttempted = false
                     latestOnError.value(null)
                     exoPlayer.logCurrentTracks("STATE_READY")
                 }
