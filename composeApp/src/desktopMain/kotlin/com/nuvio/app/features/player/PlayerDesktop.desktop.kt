@@ -53,8 +53,9 @@ internal actual object PlayerSettingsStorage {
     private const val subtitleFontSizeSpKey = "subtitle_font_size_sp"
     private const val subtitleBottomOffsetKey = "subtitle_bottom_offset"
     private const val subtitleUseForcedSubtitlesKey = "subtitle_use_forced_subtitles"
+    private const val subtitleStripSdhKey = "subtitle_strip_sdh"
+    private const val streamAutoPlayNextEpisodeFallbackEnabledKey = "stream_auto_play_next_episode_fallback_enabled"
     private const val subtitleShowOnlyPreferredLanguagesKey = "subtitle_show_only_preferred_languages"
-    private const val addonSubtitleStartupModeKey = "addon_subtitle_startup_mode"
     private const val streamReuseLastLinkEnabledKey = "stream_reuse_last_link_enabled"
     private const val streamReuseLastLinkCacheHoursKey = "stream_reuse_last_link_cache_hours"
     private const val decoderPriorityKey = "decoder_priority"
@@ -119,7 +120,8 @@ internal actual object PlayerSettingsStorage {
         subtitleBottomOffsetKey,
         subtitleUseForcedSubtitlesKey,
         subtitleShowOnlyPreferredLanguagesKey,
-        addonSubtitleStartupModeKey,
+        subtitleStripSdhKey,
+        streamAutoPlayNextEpisodeFallbackEnabledKey,
         streamReuseLastLinkEnabledKey,
         streamReuseLastLinkCacheHoursKey,
         decoderPriorityKey,
@@ -557,7 +559,8 @@ internal actual object PlayerSettingsStorage {
         loadSubtitleBottomOffset()?.let { put(subtitleBottomOffsetKey, encodeSyncInt(it)) }
         loadSubtitleUseForcedSubtitles()?.let { put(subtitleUseForcedSubtitlesKey, encodeSyncBoolean(it)) }
         loadSubtitleShowOnlyPreferredLanguages()?.let { put(subtitleShowOnlyPreferredLanguagesKey, encodeSyncBoolean(it)) }
-        loadAddonSubtitleStartupMode()?.let { put(addonSubtitleStartupModeKey, encodeSyncString(it)) }
+        loadSubtitleStripSdh()?.let { put(subtitleStripSdhKey, encodeSyncBoolean(it)) }
+        loadStreamAutoPlayNextEpisodeFallbackEnabled()?.let { put(streamAutoPlayNextEpisodeFallbackEnabledKey, encodeSyncBoolean(it)) }
         loadStreamReuseLastLinkEnabled()?.let { put(streamReuseLastLinkEnabledKey, encodeSyncBoolean(it)) }
         loadStreamReuseLastLinkCacheHours()?.let { put(streamReuseLastLinkCacheHoursKey, encodeSyncInt(it)) }
         loadDecoderPriority()?.let { put(decoderPriorityKey, encodeSyncInt(it)) }
@@ -607,7 +610,8 @@ internal actual object PlayerSettingsStorage {
         payload.decodeSyncInt(subtitleBottomOffsetKey)?.let(::saveSubtitleBottomOffset)
         payload.decodeSyncBoolean(subtitleUseForcedSubtitlesKey)?.let(::saveSubtitleUseForcedSubtitles)
         payload.decodeSyncBoolean(subtitleShowOnlyPreferredLanguagesKey)?.let(::saveSubtitleShowOnlyPreferredLanguages)
-        payload.decodeSyncString(addonSubtitleStartupModeKey)?.let(::saveAddonSubtitleStartupMode)
+        payload.decodeSyncBoolean(subtitleStripSdhKey)?.let(::saveSubtitleStripSdh)
+        payload.decodeSyncBoolean(streamAutoPlayNextEpisodeFallbackEnabledKey)?.let(::saveStreamAutoPlayNextEpisodeFallbackEnabled)
         payload.decodeSyncBoolean(streamReuseLastLinkEnabledKey)?.let(::saveStreamReuseLastLinkEnabled)
         payload.decodeSyncInt(streamReuseLastLinkCacheHoursKey)?.let(::saveStreamReuseLastLinkCacheHours)
         payload.decodeSyncInt(decoderPriorityKey)?.let(::saveDecoderPriority)
@@ -715,11 +719,19 @@ internal actual object PlayerSettingsStorage {
         saveBoolean(subtitleShowOnlyPreferredLanguagesKey, enabled)
     }
 
-    actual fun loadAddonSubtitleStartupMode(): String? = loadString(addonSubtitleStartupModeKey)
+    actual fun loadSubtitleStripSdh(): Boolean? = loadBoolean(subtitleStripSdhKey)
 
-    actual fun saveAddonSubtitleStartupMode(mode: String) {
-        saveString(addonSubtitleStartupModeKey, mode)
+    actual fun saveSubtitleStripSdh(enabled: Boolean) {
+        saveBoolean(subtitleStripSdhKey, enabled)
     }
+
+    actual fun loadStreamAutoPlayNextEpisodeFallbackEnabled(): Boolean? =
+        loadBoolean(streamAutoPlayNextEpisodeFallbackEnabledKey)
+
+    actual fun saveStreamAutoPlayNextEpisodeFallbackEnabled(enabled: Boolean) {
+        saveBoolean(streamAutoPlayNextEpisodeFallbackEnabledKey, enabled)
+    }
+
 }
 
 @Composable

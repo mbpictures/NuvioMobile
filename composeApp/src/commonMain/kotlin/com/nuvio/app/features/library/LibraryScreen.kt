@@ -67,6 +67,7 @@ import com.nuvio.app.core.i18n.localizedByteUnit
 import com.nuvio.app.core.network.NetworkCondition
 import com.nuvio.app.core.network.NetworkStatusRepository
 import com.nuvio.app.core.ui.DisintegratingContainer
+import com.nuvio.app.core.ui.DisintegrationRequest
 import com.nuvio.app.core.ui.NuvioDropdownChip
 import com.nuvio.app.core.ui.NuvioDropdownOption
 import com.nuvio.app.core.ui.NuvioScreen
@@ -74,6 +75,7 @@ import com.nuvio.app.core.ui.NuvioNetworkOfflineCard
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioViewAllPillSize
 import com.nuvio.app.core.ui.NuvioShelfSection
+import com.nuvio.app.core.ui.ScopedDisintegrationTracker
 import com.nuvio.app.core.ui.nuvioConsumePointerEvents
 import com.nuvio.app.features.cloud.CloudLibraryFile
 import com.nuvio.app.features.cloud.CloudLibraryItem
@@ -86,6 +88,7 @@ import com.nuvio.app.features.home.components.HomePosterCard
 import com.nuvio.app.features.home.components.HomeSkeletonRow
 import com.nuvio.app.features.home.components.posterGridColumnCountForWidth
 import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.tracking.TrackingRefreshIntent
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watching.application.WatchingState
 import kotlinx.coroutines.flow.Flow
@@ -103,6 +106,7 @@ fun LibraryScreen(
     onSectionViewAllClick: ((LibrarySection, LibrarySortOption) -> Unit)? = null,
     onCloudFilePlay: ((CloudLibraryItem, CloudLibraryFile) -> Unit)? = null,
     onConnectCloudClick: (() -> Unit)? = null,
+    disintegrationRequest: DisintegrationRequest<String>? = null,
 ) {
     val uiState by remember {
         LibraryRepository.ensureLoaded()
@@ -139,7 +143,7 @@ fun LibraryScreen(
     var selectedLibraryType by rememberSaveable { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val isTraktSource = uiState.sourceMode == LibrarySourceMode.TRAKT
+    val isRemoteSource = uiState.sourceMode != LibrarySourceMode.LOCAL
     val effectiveSortOption = effectiveLibrarySortOption(
         selected = displaySettings.sortOption,
         sourceMode = uiState.sourceMode,
@@ -169,11 +173,14 @@ fun LibraryScreen(
     val retryLibraryLoad: () -> Unit = {
         NetworkStatusRepository.requestRefresh(force = true)
         coroutineScope.launch {
-            LibraryRepository.pullFromServer(ProfileRepository.activeProfileId)
+            LibraryRepository.pullFromServer(
+                profileId = ProfileRepository.activeProfileId,
+                refreshIntent = TrackingRefreshIntent.USER_INITIATED,
+            )
         }
     }
 
-    LaunchedEffect(networkStatusUiState.condition, isTraktSource) {
+    LaunchedEffect(networkStatusUiState.condition, isRemoteSource) {
         when (networkStatusUiState.condition) {
             NetworkCondition.NoInternet,
             NetworkCondition.ServersUnreachable,
@@ -184,7 +191,7 @@ fun LibraryScreen(
             NetworkCondition.Online -> {
                 if (!observedOfflineState) return@LaunchedEffect
                 observedOfflineState = false
-                if (isTraktSource) {
+                if (isRemoteSource) {
                     coroutineScope.launch {
                         LibraryRepository.pullFromServer(ProfileRepository.activeProfileId)
                     }
@@ -217,7 +224,12 @@ fun LibraryScreen(
         uiState.isLoaded &&
         sortedSections.isNotEmpty()
     ) {
-        disintegration.sync(sortedSections, LIBRARY_SECTION_PREVIEW_LIMIT)
+        disintegration.sync(
+            sourceMode = uiState.sourceMode,
+            sections = sortedSections,
+            previewLimit = LIBRARY_SECTION_PREVIEW_LIMIT,
+            request = disintegrationRequest,
+        )
     } else {
         disintegration.reset()
         emptyList()
@@ -245,10 +257,12 @@ fun LibraryScreen(
                         NuvioScreenHeader(
                             title = if (sourceMode == LibraryViewMode.Cloud) {
                                 stringResource(Res.string.library_title)
-                            } else if (isTraktSource) {
-                                stringResource(Res.string.library_trakt_title)
                             } else {
-                                stringResource(Res.string.library_title)
+                                when (uiState.sourceMode) {
+                                    LibrarySourceMode.LOCAL -> stringResource(Res.string.library_title)
+                                    LibrarySourceMode.TRAKT -> stringResource(Res.string.library_trakt_title)
+                                    LibrarySourceMode.SIMKL -> stringResource(Res.string.library_simkl_title)
+                                }
                             },
                             modifier = Modifier.padding(horizontal = 16.dp),
                             actions = {
@@ -355,10 +369,10 @@ fun LibraryScreen(
                             } else {
                                 HomeEmptyStateCard(
                                     modifier = Modifier.padding(horizontal = 16.dp),
-                                    title = if (isTraktSource) {
-                                        stringResource(Res.string.library_trakt_load_failed)
-                                    } else {
-                                        stringResource(Res.string.library_load_failed)
+                                    title = when (uiState.sourceMode) {
+                                        LibrarySourceMode.LOCAL -> stringResource(Res.string.library_load_failed)
+                                        LibrarySourceMode.TRAKT -> stringResource(Res.string.library_trakt_load_failed)
+                                        LibrarySourceMode.SIMKL -> stringResource(Res.string.library_simkl_load_failed)
                                     },
                                     message = uiState.errorMessage.orEmpty(),
                                     actionLabel = stringResource(Res.string.action_retry),
@@ -370,7 +384,7 @@ fun LibraryScreen(
 
                     uiState.sections.isEmpty() -> {
                         item {
-                            if (networkStatusUiState.isOfflineLike && isTraktSource) {
+                            if (networkStatusUiState.isOfflineLike && isRemoteSource) {
                                 NuvioNetworkOfflineCard(
                                     condition = networkStatusUiState.condition,
                                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -379,15 +393,15 @@ fun LibraryScreen(
                             } else {
                                 HomeEmptyStateCard(
                                     modifier = Modifier.padding(horizontal = 16.dp),
-                                    title = if (isTraktSource) {
-                                        stringResource(Res.string.library_trakt_empty_title)
-                                    } else {
-                                        stringResource(Res.string.library_empty_title)
+                                    title = when (uiState.sourceMode) {
+                                        LibrarySourceMode.LOCAL -> stringResource(Res.string.library_empty_title)
+                                        LibrarySourceMode.TRAKT -> stringResource(Res.string.library_trakt_empty_title)
+                                        LibrarySourceMode.SIMKL -> stringResource(Res.string.library_simkl_empty_title)
                                     },
-                                    message = if (isTraktSource) {
-                                        stringResource(Res.string.library_trakt_empty_message)
-                                    } else {
-                                        stringResource(Res.string.library_empty_message)
+                                    message = when (uiState.sourceMode) {
+                                        LibrarySourceMode.LOCAL -> stringResource(Res.string.library_empty_message)
+                                        LibrarySourceMode.TRAKT -> stringResource(Res.string.library_trakt_empty_message)
+                                        LibrarySourceMode.SIMKL -> stringResource(Res.string.library_simkl_empty_message)
                                     },
                                 )
                             }
@@ -418,6 +432,7 @@ fun LibraryScreen(
                             LibraryLayoutMode.HORIZONTAL -> librarySections(
                                 displaySections = librarySectionsDisplay,
                                 watchedKeys = watchedUiState.watchedKeys,
+                                fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
                                 sortOption = effectiveSortOption,
                                 onPosterClick = onPosterClick,
                                 onSectionViewAllClick = onSectionViewAllClick,
@@ -1168,6 +1183,7 @@ private enum class LibraryViewMode {
 private fun LazyListScope.librarySections(
     displaySections: List<LibraryDisplaySection>,
     watchedKeys: Set<String>,
+    fullyWatchedSeriesKeys: Set<String>,
     sortOption: LibrarySortOption,
     onPosterClick: ((LibraryItem) -> Unit)?,
     onSectionViewAllClick: ((LibrarySection, LibrarySortOption) -> Unit)?,
@@ -1203,6 +1219,7 @@ private fun LazyListScope.librarySections(
                     isWatched = WatchingState.isPosterWatched(
                         watchedKeys = watchedKeys,
                         item = posterItem,
+                        fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
                     ),
                     onClick = if (entry.exiting) null else onPosterClick?.let { { it(item) } },
                     onLongClick = if (entry.exiting || entrySource == null) {
@@ -1239,45 +1256,36 @@ private class LibraryExitingEntry(
     val index: Int,
 )
 
-private fun libraryGlobalKey(sectionType: String, item: LibraryItem): String =
-    "$sectionType|${item.type}|${item.id}"
-
 private class LibraryDisintegrationHolder {
-    private val exiting = LinkedHashMap<String, LibraryExitingEntry>()
-    private var previous = LinkedHashMap<String, LibraryExitingEntry>()
-    private var invalidations by mutableStateOf(0)
+    private val tracker = ScopedDisintegrationTracker<LibrarySourceMode, String, LibraryExitingEntry> { entry ->
+        librarySectionItemKey(entry.sectionType, entry.item)
+    }
 
     fun onExited(globalKey: String) {
-        if (exiting.remove(globalKey) != null) invalidations++
+        tracker.onDisintegrated(globalKey)
     }
 
     fun reset() {
-        exiting.clear()
-        previous = LinkedHashMap()
+        tracker.reset()
     }
 
-    fun sync(sections: List<LibrarySection>, previewLimit: Int): List<LibraryDisplaySection> {
-        @Suppress("UNUSED_EXPRESSION")
-        invalidations
-
-        val current = LinkedHashMap<String, LibraryExitingEntry>()
+    fun sync(
+        sourceMode: LibrarySourceMode,
+        sections: List<LibrarySection>,
+        previewLimit: Int,
+        request: DisintegrationRequest<String>?,
+    ): List<LibraryDisplaySection> {
+        val current = ArrayList<LibraryExitingEntry>()
         sections.forEach { section ->
             section.items.take(previewLimit).forEachIndexed { index, item ->
-                val key = libraryGlobalKey(section.type, item)
-                current[key] = LibraryExitingEntry(item, section.type, section.displayTitle, index)
+                current += LibraryExitingEntry(item, section.type, section.displayTitle, index)
             }
         }
-        for ((key, info) in previous) {
-            if (key !in current && key !in exiting) {
-                exiting[key] = info
-            }
-        }
-        for (key in current.keys) {
-            exiting.remove(key)
-        }
-        previous = current
-
-        val exitingBySection = exiting.values.groupBy { it.sectionType }
+        val exitingBySection = tracker.sync(sourceMode, current, request)
+            .asSequence()
+            .filter { entry -> entry.exiting }
+            .map { entry -> entry.item }
+            .groupBy { entry -> entry.sectionType }
         val seenTypes = HashSet<String>(sections.size)
         val result = ArrayList<LibraryDisplaySection>(sections.size + 1)
 
@@ -1286,14 +1294,14 @@ private class LibraryDisintegrationHolder {
             val entries = ArrayList<LibraryDisplayEntry>(previewLimit + 1)
             section.items.take(previewLimit).forEach { item ->
                 entries += LibraryDisplayEntry(
-                    globalKey = libraryGlobalKey(section.type, item),
+                    globalKey = librarySectionItemKey(section.type, item),
                     item = item,
                     section = section,
                     exiting = false,
                 )
             }
             exitingBySection[section.type]?.sortedBy { it.index }?.forEach { ex ->
-                val key = libraryGlobalKey(section.type, ex.item)
+                val key = librarySectionItemKey(section.type, ex.item)
                 if (entries.none { it.globalKey == key }) {
                     entries.add(
                         ex.index.coerceIn(0, entries.size),
@@ -1308,7 +1316,7 @@ private class LibraryDisintegrationHolder {
             if (type in seenTypes) continue
             val sorted = list.sortedBy { it.index }
             val entries = sorted.map { ex ->
-                LibraryDisplayEntry(libraryGlobalKey(type, ex.item), ex.item, section = null, exiting = true)
+                LibraryDisplayEntry(librarySectionItemKey(type, ex.item), ex.item, section = null, exiting = true)
             }
             result += LibraryDisplaySection(null, type, sorted.first().sectionTitle, entries)
         }

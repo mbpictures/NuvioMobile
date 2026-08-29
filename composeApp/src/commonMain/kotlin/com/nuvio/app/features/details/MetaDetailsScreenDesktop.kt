@@ -350,7 +350,9 @@ internal fun MetaDetailsScreenDesktop(
                                         icon = if (isSaved) Icons.Default.Check else Icons.Default.Add,
                                         isActive = isSaved,
                                         onClick = {
-                                            LibraryRepository.toggleSaved(meta.toLibraryItem(savedAtEpochMs = 0L))
+                                            detailsScope.launch {
+                                                LibraryRepository.toggleSaved(meta.toLibraryItem(savedAtEpochMs = 0L))
+                                            }
                                         },
                                     ),
                                 ),

@@ -48,7 +48,6 @@ data class PlayerSettingsUiState(
     val preferredSubtitleLanguage: String = SubtitleLanguageOption.NONE,
     val secondaryPreferredSubtitleLanguage: String? = null,
     val subtitleStyle: SubtitleStyleState = SubtitleStyleState.DEFAULT,
-    val addonSubtitleStartupMode: AddonSubtitleStartupMode = AddonSubtitleStartupMode.ALL_SUBTITLES,
     val streamReuseLastLinkEnabled: Boolean = false,
     val streamReuseLastLinkCacheHours: Int = 24,
     val androidPlaybackEngine: AndroidPlaybackEngine = AndroidPlaybackEngine.Auto,
@@ -71,6 +70,7 @@ data class PlayerSettingsUiState(
     val introDbProvider: IntroDbProvider = IntroDbProvider.BOTH,
     val introSubmitEnabled: Boolean = false,
     val streamAutoPlayNextEpisodeEnabled: Boolean = false,
+    val streamAutoPlayNextEpisodeFallbackEnabled: Boolean = true,
     val streamAutoPlayPreferBingeGroup: Boolean = true,
     val streamAutoPlayReuseBingeGroup: Boolean = true,
     val nextEpisodeThresholdMode: NextEpisodeThresholdMode = NextEpisodeThresholdMode.PERCENTAGE,
@@ -115,7 +115,6 @@ object PlayerSettingsRepository {
     private var preferredSubtitleLanguage = SubtitleLanguageOption.NONE
     private var secondaryPreferredSubtitleLanguage: String? = null
     private var subtitleStyle = SubtitleStyleState.DEFAULT
-    private var addonSubtitleStartupMode = AddonSubtitleStartupMode.ALL_SUBTITLES
     private var streamReuseLastLinkEnabled = false
     private var streamReuseLastLinkCacheHours = 24
     private var androidPlaybackEngine = AndroidPlaybackEngine.Auto
@@ -138,6 +137,7 @@ object PlayerSettingsRepository {
     private var introDbProvider = IntroDbProvider.BOTH
     private var introSubmitEnabled = false
     private var streamAutoPlayNextEpisodeEnabled = false
+    private var streamAutoPlayNextEpisodeFallbackEnabled = true
     private var streamAutoPlayPreferBingeGroup = true
     private var streamAutoPlayReuseBingeGroup = true
     private var nextEpisodeThresholdMode = NextEpisodeThresholdMode.PERCENTAGE
@@ -187,7 +187,6 @@ object PlayerSettingsRepository {
         preferredSubtitleLanguage = SubtitleLanguageOption.NONE
         secondaryPreferredSubtitleLanguage = null
         subtitleStyle = SubtitleStyleState.DEFAULT
-        addonSubtitleStartupMode = AddonSubtitleStartupMode.ALL_SUBTITLES
         streamReuseLastLinkEnabled = false
         streamReuseLastLinkCacheHours = 24
         androidPlaybackEngine = AndroidPlaybackEngine.Auto
@@ -210,6 +209,7 @@ object PlayerSettingsRepository {
         introDbProvider = IntroDbProvider.BOTH
         introSubmitEnabled = false
         streamAutoPlayNextEpisodeEnabled = false
+        streamAutoPlayNextEpisodeFallbackEnabled = true
         streamAutoPlayPreferBingeGroup = true
         streamAutoPlayReuseBingeGroup = true
         nextEpisodeThresholdMode = NextEpisodeThresholdMode.PERCENTAGE
@@ -273,18 +273,17 @@ object PlayerSettingsRepository {
                 ?: SubtitleStyleState.DEFAULT.outlineWidth,
             bold = PlayerSettingsStorage.loadSubtitleBold()
                 ?: SubtitleStyleState.DEFAULT.bold,
-            fontSizeSp = PlayerSettingsStorage.loadSubtitleFontSizeSp()
-                ?: SubtitleStyleState.DEFAULT.fontSizeSp,
+            fontSizeSp = (PlayerSettingsStorage.loadSubtitleFontSizeSp()
+                ?: SubtitleStyleState.DEFAULT.fontSizeSp).coerceIn(subtitleFontSizeRangeSp),
             bottomOffset = PlayerSettingsStorage.loadSubtitleBottomOffset()
                 ?: SubtitleStyleState.DEFAULT.bottomOffset,
+            stripSdh = PlayerSettingsStorage.loadSubtitleStripSdh()
+                ?: SubtitleStyleState.DEFAULT.stripSdh,
             useForcedSubtitles = PlayerSettingsStorage.loadSubtitleUseForcedSubtitles()
                 ?: SubtitleStyleState.DEFAULT.useForcedSubtitles,
             showOnlyPreferredLanguages = PlayerSettingsStorage.loadSubtitleShowOnlyPreferredLanguages()
                 ?: SubtitleStyleState.DEFAULT.showOnlyPreferredLanguages,
         )
-        addonSubtitleStartupMode = PlayerSettingsStorage.loadAddonSubtitleStartupMode()
-            ?.let { runCatching { AddonSubtitleStartupMode.valueOf(it) }.getOrNull() }
-            ?: AddonSubtitleStartupMode.ALL_SUBTITLES
         streamReuseLastLinkEnabled = PlayerSettingsStorage.loadStreamReuseLastLinkEnabled() ?: false
         streamReuseLastLinkCacheHours = PlayerSettingsStorage.loadStreamReuseLastLinkCacheHours() ?: 24
         androidPlaybackEngine = PlayerSettingsStorage.loadAndroidPlaybackEngine()
@@ -336,6 +335,7 @@ object PlayerSettingsRepository {
             ?: IntroDbProvider.BOTH
         introSubmitEnabled = PlayerSettingsStorage.loadIntroSubmitEnabled() ?: false
         streamAutoPlayNextEpisodeEnabled = PlayerSettingsStorage.loadStreamAutoPlayNextEpisodeEnabled() ?: false
+        streamAutoPlayNextEpisodeFallbackEnabled = PlayerSettingsStorage.loadStreamAutoPlayNextEpisodeFallbackEnabled() ?: true
         streamAutoPlayPreferBingeGroup = PlayerSettingsStorage.loadStreamAutoPlayPreferBingeGroup() ?: true
         streamAutoPlayReuseBingeGroup = PlayerSettingsStorage.loadStreamAutoPlayReuseBingeGroup() ?: true
         nextEpisodeThresholdMode = PlayerSettingsStorage.loadNextEpisodeThresholdMode()
@@ -501,27 +501,21 @@ object PlayerSettingsRepository {
 
     fun setSubtitleStyle(style: SubtitleStyleState) {
         ensureLoaded()
-        if (subtitleStyle == style) return
-        subtitleStyle = style
+        val normalized = style.copy(fontSizeSp = style.fontSizeSp.coerceIn(subtitleFontSizeRangeSp))
+        if (subtitleStyle == normalized) return
+        subtitleStyle = normalized
         publish()
-        PlayerSettingsStorage.saveSubtitleTextColor(style.textColor.toStorageHexString())
-        PlayerSettingsStorage.saveSubtitleBackgroundColor(style.backgroundColor.toStorageHexString())
-        PlayerSettingsStorage.saveSubtitleOutlineColor(style.outlineColor.toStorageHexString())
-        PlayerSettingsStorage.saveSubtitleOutlineEnabled(style.outlineEnabled)
-        PlayerSettingsStorage.saveSubtitleOutlineWidth(style.outlineWidth)
-        PlayerSettingsStorage.saveSubtitleBold(style.bold)
-        PlayerSettingsStorage.saveSubtitleFontSizeSp(style.fontSizeSp)
-        PlayerSettingsStorage.saveSubtitleBottomOffset(style.bottomOffset)
-        PlayerSettingsStorage.saveSubtitleUseForcedSubtitles(style.useForcedSubtitles)
-        PlayerSettingsStorage.saveSubtitleShowOnlyPreferredLanguages(style.showOnlyPreferredLanguages)
-    }
-
-    fun setAddonSubtitleStartupMode(mode: AddonSubtitleStartupMode) {
-        ensureLoaded()
-        if (addonSubtitleStartupMode == mode) return
-        addonSubtitleStartupMode = mode
-        publish()
-        PlayerSettingsStorage.saveAddonSubtitleStartupMode(mode.name)
+        PlayerSettingsStorage.saveSubtitleTextColor(normalized.textColor.toStorageHexString())
+        PlayerSettingsStorage.saveSubtitleBackgroundColor(normalized.backgroundColor.toStorageHexString())
+        PlayerSettingsStorage.saveSubtitleOutlineColor(normalized.outlineColor.toStorageHexString())
+        PlayerSettingsStorage.saveSubtitleOutlineEnabled(normalized.outlineEnabled)
+        PlayerSettingsStorage.saveSubtitleOutlineWidth(normalized.outlineWidth)
+        PlayerSettingsStorage.saveSubtitleBold(normalized.bold)
+        PlayerSettingsStorage.saveSubtitleFontSizeSp(normalized.fontSizeSp)
+        PlayerSettingsStorage.saveSubtitleBottomOffset(normalized.bottomOffset)
+        PlayerSettingsStorage.saveSubtitleStripSdh(normalized.stripSdh)
+        PlayerSettingsStorage.saveSubtitleUseForcedSubtitles(normalized.useForcedSubtitles)
+        PlayerSettingsStorage.saveSubtitleShowOnlyPreferredLanguages(normalized.showOnlyPreferredLanguages)
     }
 
     fun setStreamReuseLastLinkEnabled(enabled: Boolean) {
@@ -702,6 +696,14 @@ object PlayerSettingsRepository {
         streamAutoPlayNextEpisodeEnabled = enabled
         publish()
         PlayerSettingsStorage.saveStreamAutoPlayNextEpisodeEnabled(enabled)
+    }
+
+    fun setStreamAutoPlayNextEpisodeFallbackEnabled(enabled: Boolean) {
+        ensureLoaded()
+        if (streamAutoPlayNextEpisodeFallbackEnabled == enabled) return
+        streamAutoPlayNextEpisodeFallbackEnabled = enabled
+        publish()
+        PlayerSettingsStorage.saveStreamAutoPlayNextEpisodeFallbackEnabled(enabled)
     }
 
     fun setStreamAutoPlayPreferBingeGroup(enabled: Boolean) {
@@ -942,7 +944,6 @@ object PlayerSettingsRepository {
             preferredSubtitleLanguage = preferredSubtitleLanguage,
             secondaryPreferredSubtitleLanguage = secondaryPreferredSubtitleLanguage,
             subtitleStyle = subtitleStyle,
-            addonSubtitleStartupMode = addonSubtitleStartupMode,
             streamReuseLastLinkEnabled = streamReuseLastLinkEnabled,
             streamReuseLastLinkCacheHours = streamReuseLastLinkCacheHours,
             androidPlaybackEngine = androidPlaybackEngine,
@@ -965,6 +966,7 @@ object PlayerSettingsRepository {
             introDbProvider = introDbProvider,
             introSubmitEnabled = introSubmitEnabled,
             streamAutoPlayNextEpisodeEnabled = streamAutoPlayNextEpisodeEnabled,
+            streamAutoPlayNextEpisodeFallbackEnabled = streamAutoPlayNextEpisodeFallbackEnabled,
             streamAutoPlayPreferBingeGroup = streamAutoPlayPreferBingeGroup,
             streamAutoPlayReuseBingeGroup = streamAutoPlayReuseBingeGroup,
             nextEpisodeThresholdMode = nextEpisodeThresholdMode,

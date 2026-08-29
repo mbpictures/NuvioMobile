@@ -5,8 +5,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
 internal actual object AppForegroundMonitor {
-    actual fun events(): Flow<Unit> = callbackFlow {
-        trySend(Unit)
+    actual fun events(): Flow<AppVisibility> = callbackFlow {
+        trySend(AppVisibility.Foreground)
         awaitClose {}
     }
 }

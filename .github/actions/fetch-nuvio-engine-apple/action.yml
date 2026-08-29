@@ -19,7 +19,7 @@ inputs:
   version:
     description: nuvio-engine release version (tag is v<version>).
     required: false
-    default: "0.1.0"
+    default: "0.1.1"
   github-token:
     description: Token used for the release download (avoids anonymous API rate limits).
     required: false

@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -87,10 +88,20 @@ object PosterZoomAnchorHolder {
     fun consume(): PosterZoomAnchor? = pending.also { pending = null }
 }
 
+enum class PosterZoomOverlayExitAnimation {
+    COLLAPSE,
+    DISINTEGRATE,
+}
+
 class PosterZoomOverlayAction(
     val icon: ImageVector,
     val label: String,
     val isDestructive: Boolean = false,
+    val exitAnimation: PosterZoomOverlayExitAnimation = if (isDestructive) {
+        PosterZoomOverlayExitAnimation.DISINTEGRATE
+    } else {
+        PosterZoomOverlayExitAnimation.COLLAPSE
+    },
     val onSelected: () -> Unit,
 )
 
@@ -129,6 +140,7 @@ fun NuvioPosterZoomActionOverlay(
     title: String,
     subtitle: String?,
     isWatched: Boolean = false,
+    blurred: Boolean = false,
     depthSurface: NuvioCardDepthSurface = NuvioCardDepthSurface.Posters,
     anchor: PosterZoomAnchor?,
     actions: List<PosterZoomOverlayAction>,
@@ -181,7 +193,7 @@ fun NuvioPosterZoomActionOverlay(
 
     fun select(action: PosterZoomOverlayAction) {
         if (phase != PosterZoomPhase.Open) return
-        if (action.isDestructive) {
+        if (action.exitAnimation == PosterZoomOverlayExitAnimation.DISINTEGRATE) {
             phase = PosterZoomPhase.Disintegrating
             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
             action.onSelected()
@@ -398,7 +410,9 @@ fun NuvioPosterZoomActionOverlay(
                         AsyncImage(
                             model = imageUrl,
                             contentDescription = title,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(if (blurred) Modifier.blur(NuvioTokens.Space.s18) else Modifier),
                             contentScale = ContentScale.Crop,
                         )
                     } else {

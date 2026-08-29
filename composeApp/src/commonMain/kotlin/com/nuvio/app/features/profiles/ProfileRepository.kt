@@ -6,6 +6,7 @@ import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.core.auth.isAnonymous
 import com.nuvio.app.core.network.SupabaseProvider
 import com.nuvio.app.core.sync.putSyncOriginClientId
+import com.nuvio.app.core.tracking.ensureTrackingProvidersRegistered
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.collection.CollectionMobileSettingsRepository
 import com.nuvio.app.features.collection.CollectionRepository
@@ -23,10 +24,11 @@ import com.nuvio.app.features.p2p.P2pSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.plugins.PluginRepository
 import com.nuvio.app.features.search.SearchHistoryRepository
+import com.nuvio.app.features.search.SearchRepository
 import com.nuvio.app.features.settings.ThemeSettingsRepository
 import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
-import com.nuvio.app.features.trakt.TraktAuthRepository
-import com.nuvio.app.features.trakt.TraktSettingsRepository
+import com.nuvio.app.features.tracking.TrackingProviderRegistry
+import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import com.nuvio.app.features.tmdb.TmdbSettingsRepository
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
@@ -154,8 +156,9 @@ object ProfileRepository {
         )
         persist()
         WatchedRepository.onProfileChanged(profileIndex)
-        TraktSettingsRepository.onProfileChanged()
-        TraktAuthRepository.onProfileChanged(profileIndex)
+        TrackingSettingsRepository.onProfileChanged()
+        ensureTrackingProvidersRegistered()
+        TrackingProviderRegistry.onProfileChanged()
         LibraryRepository.onProfileChanged(profileIndex)
         LibraryDisplaySettingsRepository.onProfileChanged()
         WatchProgressRepository.onProfileChanged(profileIndex)
@@ -178,6 +181,7 @@ object ProfileRepository {
         TmdbSettingsRepository.onProfileChanged()
         MdbListSettingsRepository.onProfileChanged()
         SearchHistoryRepository.onProfileChanged()
+        SearchRepository.reset()
         CollectionRepository.onProfileChanged()
         CollectionMobileSettingsRepository.onProfileChanged()
         DownloadsRepository.onProfileChanged()
@@ -221,6 +225,8 @@ object ProfileRepository {
                 usesPrimaryPlugins = profile.usesPrimaryPlugins,
                 avatarId = profile.avatarId,
                 avatarUrl = profile.avatarUrl,
+                profileBackgroundId = profile.profileBackgroundId,
+                profileBackgroundUrl = profile.profileBackgroundUrl,
             )
         } + ProfilePushPayload(
             profileIndex = nextIndex,
@@ -240,6 +246,8 @@ object ProfileRepository {
         avatarColorHex: String,
         avatarId: String? = null,
         avatarUrl: String? = null,
+        profileBackgroundId: String? = null,
+        profileBackgroundUrl: String? = null,
         usesPrimaryAddons: Boolean = false,
     ) {
         val allPayloads = _state.value.profiles.map { profile ->
@@ -251,6 +259,8 @@ object ProfileRepository {
                     usesPrimaryAddons = usesPrimaryAddons,
                     avatarId = avatarId,
                     avatarUrl = avatarUrl,
+                    profileBackgroundId = profileBackgroundId,
+                    profileBackgroundUrl = profileBackgroundUrl,
                 )
             } else {
                 ProfilePushPayload(
@@ -261,6 +271,8 @@ object ProfileRepository {
                     usesPrimaryPlugins = profile.usesPrimaryPlugins,
                     avatarId = profile.avatarId,
                     avatarUrl = profile.avatarUrl,
+                    profileBackgroundId = profile.profileBackgroundId,
+                    profileBackgroundUrl = profile.profileBackgroundUrl,
                 )
             }
         }
@@ -308,6 +320,7 @@ object ProfileRepository {
             val result = SupabaseProvider.client.postgrest.rpc("verify_profile_pin", params)
             result.decodeSingle<PinVerifyResult>().also { verifyResult ->
                 if (verifyResult.unlocked) {
+                    pullProfiles()
                     rememberVerifiedPin(profileIndex = profileIndex, pin = pin)
                 }
             }
@@ -395,6 +408,8 @@ object ProfileRepository {
                 avatarColorHex = p.avatarColorHex,
                 avatarId = p.avatarId,
                 avatarUrl = p.avatarUrl,
+                profileBackgroundId = p.profileBackgroundId,
+                profileBackgroundUrl = p.profileBackgroundUrl,
                 usesPrimaryAddons = p.usesPrimaryAddons,
                 usesPrimaryPlugins = p.usesPrimaryPlugins,
             )
