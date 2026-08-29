@@ -1,9 +1,10 @@
 name: Update Sideload Source
 
+# Called only by the release pipeline. The upstream `release: published`
+# trigger is intentionally absent: this fork publishes several release
+# assets (the job requires exactly one .ipa) and store.json still carries
+# upstream's NuvioMedia branding.
 on:
-  release:
-    types:
-      - published
   workflow_call:
     inputs:
       tag:
@@ -17,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: sideload-source-${{ inputs.tag || github.event.release.tag_name }}
+  group: sideload-source-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -26,8 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
-      RELEASE_VERSION: ${{ inputs.version || github.event.release.tag_name }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_VERSION: ${{ inputs.version }}
       RELEASE_BRANCH: ${{ github.event.repository.default_branch }}
 
     steps:
