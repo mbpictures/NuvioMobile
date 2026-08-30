@@ -29,6 +29,10 @@ internal actual object TraktAuthStorage {
             payload,
         )
     }
+
+    actual fun removeProfile(profileId: Int) {
+        DesktopPreferences.remove(preferencesName, ProfileScopedKey.of(payloadKey, profileId))
+    }
 }
 
 internal actual object TraktCommentsStorage {

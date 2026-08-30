@@ -103,6 +103,13 @@ jobs:
         working-directory: iosApp
         run: pod install
 
+      # Pre-download MPVKit's binary artifacts with retries so a flaky download
+      # cannot poison the SwiftPM cache mid-build.
+      - name: Resolve Swift package dependencies
+        run: ./scripts/resolve-ios-packages.sh
+        env:
+          IOS_DERIVED_DATA_PATH: build/ios-derived-pr
+
       # Both iOS distributions (appstore / full) swap source dirs and deps,
       # so each must be type-checked independently.
       - name: Compile shared Kotlin/Native (appstore distribution)

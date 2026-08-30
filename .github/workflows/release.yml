@@ -266,6 +266,11 @@ jobs:
         working-directory: iosApp
         run: pod install
 
+      # Pre-download MPVKit's binary artifacts with retries so a flaky download
+      # cannot poison the SwiftPM cache mid-build.
+      - name: Resolve Swift package dependencies
+        run: ./scripts/resolve-ios-packages.sh
+
       - name: Archive iOS app (Release, unsigned)
         run: |
           set -euo pipefail
@@ -679,6 +684,11 @@ jobs:
       - name: Install CocoaPods dependencies
         working-directory: iosApp
         run: pod install
+
+      # Pre-download MPVKit's binary artifacts with retries so a flaky download
+      # cannot poison the SwiftPM cache mid-build.
+      - name: Resolve Swift package dependencies
+        run: ./scripts/resolve-ios-packages.sh
 
       - name: Archive iOS app (Release, signed for App Store)
         env:

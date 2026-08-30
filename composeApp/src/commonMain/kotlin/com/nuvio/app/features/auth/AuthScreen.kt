@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,6 +47,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,7 +68,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -85,13 +85,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.auth.AuthRepository
+import com.nuvio.app.core.auth.DeviceLinkAuthRepository
+import com.nuvio.app.core.auth.DeviceLinkAuthState
+import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.features.settings.AppBrandWordmark
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
-import nuvio.composeapp.generated.resources.app_logo_wordmark
 import nuvio.composeapp.generated.resources.compose_auth_already_have_account
 import nuvio.composeapp.generated.resources.compose_auth_continue_without_account
 import nuvio.composeapp.generated.resources.compose_auth_create_account
@@ -108,17 +111,16 @@ import nuvio.composeapp.generated.resources.compose_auth_tagline
 import nuvio.composeapp.generated.resources.compose_auth_terms_link
 import nuvio.composeapp.generated.resources.compose_auth_terms_prefix
 import nuvio.composeapp.generated.resources.compose_auth_welcome_back
-import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
-private val AuthTextPrimary = Color(0xFFF5F7F8)
-private val AuthTextSecondary = Color(0xFF969CA3)
+internal val AuthTextPrimary = Color(0xFFF5F7F8)
+internal val AuthTextSecondary = Color(0xFF969CA3)
 private val AuthTextMuted = Color(0xFF6E7178)
 private val AuthPrimaryButtonBackground = Color(0xFFF5F5F5)
 private val AuthPrimaryButtonText = Color(0xFF111111)
-private val AuthFieldBackground = Color.White.copy(alpha = 0.04f)
+internal val AuthFieldBackground = Color.White.copy(alpha = 0.04f)
 private val AuthFieldBackgroundMobile = Color.White.copy(alpha = 0.035f)
-private val AuthFieldBorder = Color.White.copy(alpha = 0.08f)
+internal val AuthFieldBorder = Color.White.copy(alpha = 0.08f)
 private val AuthPaneBackground = Color.White.copy(alpha = 0.022f)
 private val AuthPaneBorder = Color.White.copy(alpha = 0.07f)
 private val AuthDividerColor = Color.White.copy(alpha = 0.10f)
@@ -188,6 +190,8 @@ fun AuthScreen(
     modifier: Modifier = Modifier,
 ) {
     val authError by AuthRepository.error.collectAsStateWithLifecycle()
+    val deviceLinkAuthState by DeviceLinkAuthRepository.state.collectAsStateWithLifecycle()
+    val serverConnectionState by ServerConnectionController.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     var isSignUp by rememberSaveable { mutableStateOf(false) }
@@ -197,9 +201,12 @@ fun AuthScreen(
     var isLoading by rememberSaveable { mutableStateOf(false) }
     var emailFieldBounds by remember { mutableStateOf<Rect?>(null) }
     var passwordFieldBounds by remember { mutableStateOf<Rect?>(null) }
+    var showServerSheet by rememberSaveable { mutableStateOf(false) }
+    var showOfficialServerDialog by rememberSaveable { mutableStateOf(false) }
 
     fun submitAuth() {
         if (email.isBlank() || password.length < 6 || isLoading) return
+        DeviceLinkAuthRepository.cancel()
         isLoading = true
         focusManager.clearFocus(force = true)
         scope.launch {
@@ -210,11 +217,30 @@ fun AuthScreen(
     }
 
     fun toggleAuthMode() {
+        DeviceLinkAuthRepository.cancel()
         isSignUp = !isSignUp
         AuthRepository.clearError()
     }
 
+    fun startDeviceLink() {
+        if (isLoading) return
+        focusManager.clearFocus(force = true)
+        AuthRepository.clearError()
+        DeviceLinkAuthRepository.start()
+    }
+
     val statusBarTop = nuvioStatusBarTopPadding()
+
+    LaunchedEffect(serverConnectionState.activeServer.backendUrl) {
+        DeviceLinkAuthRepository.cancel()
+        if (!serverConnectionState.activeServer.isCustom) {
+            showOfficialServerDialog = false
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose(DeviceLinkAuthRepository::cancel)
+    }
 
     Box(
         modifier = modifier
@@ -261,6 +287,8 @@ fun AuthScreen(
                         passwordVisible = passwordVisible,
                         isLoading = isLoading,
                         authError = authError,
+                        deviceLinkAuthState = deviceLinkAuthState,
+                        deviceLinkEnabled = serverConnectionState.activeServer.capabilities.tvLogin,
                         formPaneWidth = if (compactLargeScreen) 460.dp else formPaneWidth,
                         brandHorizontalPadding = brandHorizontalPadding,
                         formHorizontalPadding = formHorizontalPadding,
@@ -279,8 +307,11 @@ fun AuthScreen(
                         onToggleAuthMode = ::toggleAuthMode,
                         onContinueWithoutAccount = {
                             focusManager.clearFocus(force = true)
+                            DeviceLinkAuthRepository.cancel()
                             AuthRepository.signInAnonymously()
                         },
+                        onStartDeviceLink = ::startDeviceLink,
+                        onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
                     )
@@ -292,6 +323,8 @@ fun AuthScreen(
                         passwordVisible = passwordVisible,
                         isLoading = isLoading,
                         authError = authError,
+                        deviceLinkAuthState = deviceLinkAuthState,
+                        deviceLinkEnabled = serverConnectionState.activeServer.capabilities.tvLogin,
                         statusBarTop = statusBarTop,
                         onEmailChange = {
                             email = it
@@ -306,14 +339,76 @@ fun AuthScreen(
                         onToggleAuthMode = ::toggleAuthMode,
                         onContinueWithoutAccount = {
                             focusManager.clearFocus(force = true)
+                            DeviceLinkAuthRepository.cancel()
                             AuthRepository.signInAnonymously()
                         },
+                        onStartDeviceLink = ::startDeviceLink,
+                        onCancelDeviceLink = DeviceLinkAuthRepository::cancel,
                         onEmailBoundsChange = { emailFieldBounds = it },
                         onPasswordBoundsChange = { passwordFieldBounds = it },
                     )
                 }
             }
         }
+
+        if (AppFeaturePolicy.customServerConnectionsEnabled) {
+            ServerConnectionMenu(
+                activeServer = serverConnectionState.activeServer,
+                onUseOfficial = {
+                    ServerConnectionController.resetDiscovery()
+                    showOfficialServerDialog = true
+                },
+                onConnectCustom = {
+                    ServerConnectionController.resetDiscovery()
+                    showServerSheet = true
+                },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 8.dp, top = statusBarTop + 4.dp),
+            )
+        }
+    }
+
+    if (
+        AppFeaturePolicy.customServerConnectionsEnabled &&
+        showServerSheet &&
+        serverConnectionState.discoveredServer == null
+    ) {
+        ServerConnectionSheet(
+            state = serverConnectionState,
+            onDiscover = ServerConnectionController::discover,
+            onDismiss = {
+                showServerSheet = false
+                ServerConnectionController.resetDiscovery()
+            },
+        )
+    }
+
+    serverConnectionState.discoveredServer?.let { server ->
+        if (AppFeaturePolicy.customServerConnectionsEnabled) {
+            ServerTrustDialog(
+                server = server,
+                isSwitching = serverConnectionState.isSwitching,
+                switchFailure = serverConnectionState.switchFailure,
+                onConfirm = ServerConnectionController::connectDiscovered,
+                onDismiss = {
+                    showServerSheet = false
+                    ServerConnectionController.resetDiscovery()
+                },
+            )
+        }
+    }
+
+    if (AppFeaturePolicy.customServerConnectionsEnabled && showOfficialServerDialog) {
+        OfficialServerDialog(
+            isSwitching = serverConnectionState.isSwitching,
+            switchFailure = serverConnectionState.switchFailure,
+            onConfirm = ServerConnectionController::useOfficial,
+            onDismiss = {
+                showOfficialServerDialog = false
+                ServerConnectionController.resetDiscovery()
+            },
+        )
     }
 }
 
@@ -325,6 +420,8 @@ private fun AuthMobileLayout(
     passwordVisible: Boolean,
     isLoading: Boolean,
     authError: String?,
+    deviceLinkAuthState: DeviceLinkAuthState,
+    deviceLinkEnabled: Boolean,
     statusBarTop: Dp,
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
@@ -332,6 +429,8 @@ private fun AuthMobileLayout(
     onSubmit: () -> Unit,
     onToggleAuthMode: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
+    onStartDeviceLink: () -> Unit,
+    onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
 ) {
@@ -382,6 +481,8 @@ private fun AuthMobileLayout(
                 passwordVisible = passwordVisible,
                 isLoading = isLoading,
                 authError = authError,
+                deviceLinkAuthState = deviceLinkAuthState,
+                deviceLinkEnabled = deviceLinkEnabled,
                 metrics = MobileAuthFormMetrics,
                 onEmailChange = onEmailChange,
                 onPasswordChange = onPasswordChange,
@@ -389,6 +490,8 @@ private fun AuthMobileLayout(
                 onSubmit = onSubmit,
                 onToggleAuthMode = onToggleAuthMode,
                 onContinueWithoutAccount = onContinueWithoutAccount,
+                onStartDeviceLink = onStartDeviceLink,
+                onCancelDeviceLink = onCancelDeviceLink,
                 onEmailBoundsChange = onEmailBoundsChange,
                 onPasswordBoundsChange = onPasswordBoundsChange,
             )
@@ -405,6 +508,8 @@ private fun AuthLargeLayout(
     passwordVisible: Boolean,
     isLoading: Boolean,
     authError: String?,
+    deviceLinkAuthState: DeviceLinkAuthState,
+    deviceLinkEnabled: Boolean,
     formPaneWidth: Dp,
     brandHorizontalPadding: Dp,
     formHorizontalPadding: Dp,
@@ -416,6 +521,8 @@ private fun AuthLargeLayout(
     onSubmit: () -> Unit,
     onToggleAuthMode: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
+    onStartDeviceLink: () -> Unit,
+    onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
 ) {
@@ -430,11 +537,9 @@ private fun AuthLargeLayout(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.Start,
         ) {
-            Image(
-                painter = painterResource(Res.drawable.app_logo_wordmark),
+            AppBrandWordmark(
                 contentDescription = null,
                 modifier = Modifier.height(60.dp * scale),
-                contentScale = ContentScale.Fit,
             )
             Spacer(modifier = Modifier.height(32.dp * scale))
             Text(
@@ -505,6 +610,8 @@ private fun AuthLargeLayout(
                     passwordVisible = passwordVisible,
                     isLoading = isLoading,
                     authError = authError,
+                    deviceLinkAuthState = deviceLinkAuthState,
+                    deviceLinkEnabled = deviceLinkEnabled,
                     metrics = formMetrics,
                     scale = scale,
                     onEmailChange = onEmailChange,
@@ -513,6 +620,8 @@ private fun AuthLargeLayout(
                     onSubmit = onSubmit,
                     onToggleAuthMode = onToggleAuthMode,
                     onContinueWithoutAccount = onContinueWithoutAccount,
+                    onStartDeviceLink = onStartDeviceLink,
+                    onCancelDeviceLink = onCancelDeviceLink,
                     onEmailBoundsChange = onEmailBoundsChange,
                     onPasswordBoundsChange = onPasswordBoundsChange,
                 )
@@ -528,11 +637,9 @@ private fun AuthBrandLockup(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Image(
-            painter = painterResource(Res.drawable.app_logo_wordmark),
+        AppBrandWordmark(
             contentDescription = null,
             modifier = Modifier.height(logoHeight),
-            contentScale = ContentScale.Fit,
         )
         Spacer(modifier = Modifier.height(14.dp))
         Text(
@@ -592,6 +699,8 @@ private fun AuthForm(
     passwordVisible: Boolean,
     isLoading: Boolean,
     authError: String?,
+    deviceLinkAuthState: DeviceLinkAuthState,
+    deviceLinkEnabled: Boolean,
     metrics: AuthFormMetrics,
     scale: Float = 1f,
     onEmailChange: (String) -> Unit,
@@ -600,6 +709,8 @@ private fun AuthForm(
     onSubmit: () -> Unit,
     onToggleAuthMode: () -> Unit,
     onContinueWithoutAccount: () -> Unit,
+    onStartDeviceLink: () -> Unit,
+    onCancelDeviceLink: () -> Unit,
     onEmailBoundsChange: (Rect) -> Unit,
     onPasswordBoundsChange: (Rect) -> Unit,
 ) {
@@ -692,6 +803,19 @@ private fun AuthForm(
         AuthDivider(scale = scale)
 
         Spacer(modifier = Modifier.height(metrics.secondaryTop))
+
+        if (!isSignUp && deviceLinkEnabled) {
+            DeviceLinkAuthSection(
+                state = deviceLinkAuthState,
+                enabled = !isLoading,
+                height = metrics.secondaryHeight,
+                scale = scale,
+                onStart = onStartDeviceLink,
+                onCancel = onCancelDeviceLink,
+            )
+
+            Spacer(modifier = Modifier.height(14.dp * scale))
+        }
 
         AuthSecondaryButton(
             text = stringResource(Res.string.compose_auth_continue_without_account),
@@ -845,7 +969,7 @@ private fun AuthTextField(
 }
 
 @Composable
-private fun AuthPrimaryButton(
+internal fun AuthPrimaryButton(
     text: String,
     isLoading: Boolean,
     enabled: Boolean,
@@ -973,7 +1097,7 @@ private fun AuthDivider(scale: Float) {
 }
 
 @Composable
-private fun AuthSecondaryButton(
+internal fun AuthSecondaryButton(
     text: String,
     enabled: Boolean,
     height: Dp,
