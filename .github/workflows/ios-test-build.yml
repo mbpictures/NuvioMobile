@@ -68,6 +68,11 @@ jobs:
       - name: Prepare iOS dependencies
         run: ./scripts/prepare-ios-dependencies.sh
 
+      # Pre-download MPVKit's binary artifacts with retries so a flaky download
+      # cannot poison the SwiftPM cache mid-build.
+      - name: Resolve Swift package dependencies
+        run: ./scripts/resolve-ios-packages.sh
+
       - name: Build unsigned full ${{ inputs.configuration }} IPA
         run: |
           (
